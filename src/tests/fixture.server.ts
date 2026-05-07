@@ -4,7 +4,7 @@ config({ path: '.env.test' });
 import { test as base } from 'vitest';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import pg from 'pg';
-import * as schema from '../db/schema';
+import * as schema from '../db/schemas';
 import { env } from '#/env';
 
 const pool = new pg.Pool({

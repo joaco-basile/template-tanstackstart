@@ -1,242 +1,372 @@
 ---
 name: project-error-handling
 description: >
-  Project-specific error handling patterns for the full-stack TanStack Start stack.
-  Covers server function errors, Zod validation, TanStack Query error boundaries,
-  and form error mapping. Trigger when writing createServerFn handlers, handling
-  mutation/query errors, or deciding how to structure AppError vs ZodError.
+  Manejo de errores en todo el stack. Jerarquía AppError, integración con ZodError,
+  error boundaries en rutas, configuración de retry en QueryClient, y mapeo de errores
+  a formularios. Leer cuando escribas createServerFn, manejes errores en mutations,
+  configures boundaries, o definas un nuevo tipo de error de negocio.
 license: Apache-2.0
 metadata:
-  author: gentleman-programming
-  version: "1.0"
+  author: proyecto
+  version: "2.0"
 ---
 
-## When to Use
+## Árbol de decisión — empezá acá
 
-- Writing a `createServerFn` and you need to decide how to throw errors
-- Mapping server errors to a TanStack Form
-- Configuring error boundaries on TanStack Router routes
-- Defining a new business error type (not found, unauthorized, conflict)
-- Deciding whether to use `.validator(zodSchema)` directly or parse manually
+```
+¿Qué tipo de error necesitás manejar?
+│
+├── ¿Error de validación de INPUT del usuario? (campo requerido, formato inválido)
+│   └── → .validator(zodSchema) en createServerFn
+│       → El cliente recibe ZodError. Mapearlo a campos del formulario.
+│       → NUNCA transformar ZodError en AppError manualmente.
+│
+├── ¿Error de negocio? (recurso no encontrado, permiso denegado, conflicto de datos)
+│   └── → throw new NotFoundError() / UnauthorizedError() / ConflictError()
+│       → El cliente los distingue por .code y .status
+│
+├── ¿Error inesperado de DB o sistema?
+│   └── → loguear en servidor, throw new InternalError()
+│       → El cliente muestra mensaje genérico
+│
+├── ¿Error de red o timeout en una query de React Query?
+│   └── → configurar retry en QueryClient (ver sección "QueryClient")
+│       → mostrar error boundary con botón "Reintentar"
+│
+└── ¿Error dentro de un loader de ruta?
+    └── → configurar errorComponent en el route (ver sección "Route Boundaries")
+```
 
-## Core Principle: Hybrid Model
+---
 
-We use **two error systems in layers**, not a single one:
-
-| Layer | Error Type | When | Why |
-|-------|-----------|------|-----|
-| **Input validation** | `ZodError` | `.validator(zodSchema)` fails | TanStack Form understands `ZodError` natively (nested paths, `zodValidator`) |
-| **Business / DB / Auth** | `AppError` | Inside `.handler()` | Unifies everything Zod cannot know: duplicates, permissions, not found |
-
-> **Never manually transform `ZodError` into `ValidationError`.** Use `.validator()` directly and let TanStack Start serialize the `ZodError`. On the client, if the error is form-related, use `error.issues`. If it is a mutation error, use `AppError`.
-
-## Error Hierarchy
+## Jerarquía de errores (`src/lib/errors.ts`)
 
 ```ts
-// src/lib/errors.ts
 export class AppError extends Error {
   constructor(
     message: string,
-    public code: string,
-    public status: number = 400
+    public readonly code: string,
+    public readonly status: number = 400,
+    public readonly meta?: Record<string, unknown>,
   ) {
-    super(message)
-    this.name = 'AppError'
+    super(message);
+    this.name = "AppError";
+    // Preservar stack trace en V8
+    if (Error.captureStackTrace)
+      Error.captureStackTrace(this, this.constructor);
   }
 }
 
 export class NotFoundError extends AppError {
-  constructor(resource: string) {
-    super(`${resource} not found`, 'NOT_FOUND', 404)
+  constructor(resource = "Recurso") {
+    super(`${resource} no encontrado`, "NOT_FOUND", 404);
   }
 }
 
 export class UnauthorizedError extends AppError {
-  constructor(message = 'Unauthorized') {
-    super(message, 'UNAUTHORIZED', 401)
+  constructor(message = "No autorizado") {
+    super(message, "UNAUTHORIZED", 401);
+  }
+}
+
+export class ForbiddenError extends AppError {
+  constructor(message = "Sin permisos suficientes") {
+    super(message, "FORBIDDEN", 403);
   }
 }
 
 export class ConflictError extends AppError {
-  constructor(message: string) {
-    super(message, 'CONFLICT', 409)
+  constructor(message: string, meta?: Record<string, unknown>) {
+    super(message, "CONFLICT", 409, meta);
+  }
+}
+
+export class ValidationError extends AppError {
+  constructor(
+    message: string,
+    public readonly fields?: Record<string, string>,
+  ) {
+    super(message, "VALIDATION_ERROR", 422);
   }
 }
 
 export class InternalError extends AppError {
-  constructor(message = 'Internal server error') {
-    super(message, 'INTERNAL_ERROR', 500)
+  constructor(message = "Error interno del servidor") {
+    super(message, "INTERNAL_ERROR", 500);
   }
 }
 ```
 
-## Server Function Pattern
+---
+
+## Server Functions: el patrón correcto
 
 ```ts
-import { createServerFn, notFound } from '@tanstack/react-start'
-import { z } from 'zod'
-import { db } from '@/lib/db.server'
-import { AppError, ConflictError, NotFoundError } from '@/lib/errors'
+// src/features/posts/posts.functions.ts
+import { createServerFn } from "@tanstack/react-start";
+import { z } from "zod";
+import { authMiddleware } from "@/middleware/auth";
+import {
+  NotFoundError,
+  ConflictError,
+  InternalError,
+  ForbiddenError,
+} from "@/lib/errors";
+import { createPost, getPostById } from "./posts.server";
+import { createPostSchema } from "./posts.schema";
 
-const createPostSchema = z.object({
-  title: z.string().min(1, 'Title is required').max(200),
-  content: z.string().min(1, 'Content is required'),
-})
+export const createPostFn = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator(createPostSchema) // ← ZodError automático. No tocar.
+  .handler(async ({ data, context }) => {
+    if (!context.user) throw new UnauthorizedError();
 
-export const createPost = createServerFn({ method: 'POST' })
-  .validator(createPostSchema) // ← Raw ZodError. Do not touch it.
-  .handler(async ({ data }) => {
     try {
-      return await db.posts.create({ data })
+      return await createPost({ ...data, authorId: context.user.id });
     } catch (error) {
-      if (error.code === 'P2002') {
-        throw new ConflictError('A post with that title already exists')
+      // Error de constraint único de Postgres
+      if (error instanceof Error && "code" in error && error.code === "23505") {
+        throw new ConflictError("Ya existe un post con ese título");
       }
-      console.error('DB error:', error)
-      throw new InternalError()
+      // Cualquier otro error de DB → no exponer detalles
+      console.error("[createPostFn] DB error:", error);
+      throw new InternalError();
     }
-  })
+  });
 
-export const getPost = createServerFn()
-  .validator(z.object({ id: z.string() }))
-  .handler(async ({ data }) => {
-    const post = await db.posts.findUnique({ where: { id: data.id } })
-    if (!post) throw notFound() // ← TanStack Start 404
-    return post
-  })
+export const getPostFn = createServerFn({ method: "GET" })
+  .validator(z.string().min(1))
+  .handler(async ({ data: id }) => {
+    const post = await getPostById(id);
+    if (!post) throw new NotFoundError("Post");
+    return post;
+  });
 ```
 
-## Client-Side: Mutation Error Handling
+**Lo que NUNCA hacer:**
 
-```tsx
-import { useMutation } from '@tanstack/react-query'
-import { ZodError } from 'zod'
-import { AppError } from '@/lib/errors'
-import { createPost } from '@/lib/posts.functions'
+```ts
+// ❌ Retornar objeto de error en vez de tirar
+return { success: false, error: 'No encontrado' }
 
-function CreatePostForm() {
-  const form = useForm({
-    // ... tanstack form config
-  })
+// ❌ Tirar Error genérico
+throw new Error('Something went wrong')
 
-  const mutation = useMutation({
-    mutationFn: createPost,
-    onError: (error) => {
-      // 1. If it is a ZodError → field errors (came from .validator())
-      if (error instanceof ZodError) {
-        error.issues.forEach((issue) => {
-          form.setFieldMeta(issue.path, (prev) => ({
-            ...prev,
-            errorMap: { onServer: issue.message },
-          }))
-        })
-        return
-      }
-
-      // 2. If it is an AppError → global mutation error
-      if (error instanceof AppError) {
-        form.setFieldMeta('root', (prev) => ({
-          ...prev,
-          errorMap: { onServer: error.message },
-        }))
-        return
-      }
-
-      // 3. Fallback
-      form.setFieldMeta('root', (prev) => ({
-        ...prev,
-        errorMap: { onServer: 'An unexpected error occurred' },
-      }))
-    },
-  })
+// ❌ Re-envolver ZodError en ValidationError
+} catch (e) {
+  if (e instanceof ZodError) throw new ValidationError('Campos inválidos')
 }
 ```
 
-## Route-Level Error Boundaries
+---
+
+## Cliente: manejo en mutations
 
 ```tsx
-import { createFileRoute } from '@tanstack/react-router'
-import { useQueryErrorResetBoundary } from '@tanstack/react-query'
-import { ErrorBoundary } from 'react-error-boundary'
+// src/features/posts/components/CreatePostForm.tsx
+import { useForm } from "@tanstack/react-form";
+import { zodValidator } from "@tanstack/zod-form-adapter";
+import { ZodError } from "zod";
+import { AppError } from "@/lib/errors";
+import { useCreatePost } from "../posts.mutations";
 
-export const Route = createFileRoute('/posts/$postId')({
-  loader: ({ context: { queryClient }, params }) =>
-    queryClient.ensureQueryData(postQueries.detail(params.postId)),
+export function CreatePostForm() {
+  const createPost = useCreatePost();
+
+  const form = useForm({
+    defaultValues: { title: "", content: "" },
+    validatorAdapter: zodValidator(),
+  });
+
+  async function handleSubmit() {
+    try {
+      await createPost.mutateAsync(form.state.values);
+      // éxito
+    } catch (error) {
+      if (error instanceof ZodError) {
+        // Errores de validación → mapear a campos
+        for (const issue of error.issues) {
+          const field = issue.path.join(".");
+          form.setFieldMeta(field as any, (prev) => ({
+            ...prev,
+            errorMap: { onSubmit: issue.message },
+          }));
+        }
+        return;
+      }
+
+      if (error instanceof AppError) {
+        // Error de negocio → mostrar en root del formulario o toast
+        if (error.status === 409) {
+          form.setFieldMeta("title", (prev) => ({
+            ...prev,
+            errorMap: { onSubmit: error.message },
+          }));
+        } else {
+          toast.error(error.message);
+        }
+        return;
+      }
+
+      // Fallback para errores inesperados
+      toast.error("Ocurrió un error inesperado. Intentá de nuevo.");
+      console.error("[CreatePostForm] unexpected error:", error);
+    }
+  }
+}
+```
+
+---
+
+## Route Error Boundaries
+
+Cada ruta puede definir su propio componente de error. Usarlo para errores específicos del dominio.
+
+```tsx
+// src/routes/posts/$postId.tsx
+import { createFileRoute } from "@tanstack/react-router";
+import { useQueryErrorResetBoundary } from "@tanstack/react-query";
+import { AppError } from "@/lib/errors";
+
+export const Route = createFileRoute("/posts/$postId")({
+  loader: async ({ context: { queryClient }, params }) => {
+    // ensureQueryData lanza el error del loader si falla
+    await queryClient.ensureQueryData(postsQueries.detail(params.postId));
+  },
 
   errorComponent: ({ error, reset }) => {
-    const { reset: resetQuery } = useQueryErrorResetBoundary()
+    const { reset: resetQuery } = useQueryErrorResetBoundary();
 
+    // 404 específico
+    if (error instanceof AppError && error.status === 404) {
+      return (
+        <div className="flex flex-col items-center gap-4 py-16">
+          <h1 className="text-2xl font-semibold">Post no encontrado</h1>
+          <p className="text-muted-foreground">
+            El post que buscás no existe o fue eliminado.
+          </p>
+          <Button asChild>
+            <Link to="/posts">Volver al listado</Link>
+          </Button>
+        </div>
+      );
+    }
+
+    // Error genérico con retry
     return (
-      <div>
-        <h2>Error loading post</h2>
-        <p>{error instanceof Error ? error.message : 'Unknown error'}</p>
-        <button onClick={() => { resetQuery(); reset(); }}>
-          Retry
-        </button>
+      <div className="flex flex-col items-center gap-4 py-16">
+        <h1 className="text-2xl font-semibold">Error al cargar</h1>
+        <p className="text-muted-foreground text-sm">
+          {error instanceof Error ? error.message : "Error desconocido"}
+        </p>
+        <Button
+          onClick={() => {
+            resetQuery();
+            reset();
+          }}
+        >
+          Reintentar
+        </Button>
       </div>
-    )
+    );
   },
 
   component: PostPage,
-})
+});
 ```
 
-## QueryClient Default Error Config
+### Error boundary global (para errores no capturados por rutas)
+
+```tsx
+// src/routes/__root.tsx
+import { Outlet, createRootRouteWithContext } from "@tanstack/react-router";
+
+export const Route = createRootRouteWithContext<RouterContext>()({
+  errorComponent: ({ error }) => {
+    // Aquí llegan solo los errores que ninguna ruta hija capturó
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="text-center">
+          <h1 className="text-3xl font-bold">Algo salió mal</h1>
+          <Button onClick={() => window.location.reload()} className="mt-4">
+            Recargar página
+          </Button>
+        </div>
+      </div>
+    );
+  },
+  component: () => <Outlet />,
+});
+```
+
+---
+
+## QueryClient: configuración de retry
 
 ```ts
-// src/integrations/tanstack-query/root-provider.tsx
-import { QueryClient } from '@tanstack/react-query'
+// src/lib/query-client.ts
+import { QueryClient } from "@tanstack/react-query";
+import { AppError } from "@/lib/errors";
 
-export function getContext() {
-  const queryClient = new QueryClient({
+export function createQueryClient() {
+  return new QueryClient({
     defaultOptions: {
       queries: {
+        // No reintentar errores 4xx — son definitivos
         retry: (failureCount, error) => {
-          // Do not retry 4xx errors (they are definitive)
-          if (error instanceof AppError && error.status >= 400 && error.status < 500) {
-            return false
+          if (error instanceof AppError) {
+            if (error.status >= 400 && error.status < 500) return false;
           }
-          return failureCount < 3
+          return failureCount < 2; // hasta 2 reintentos para errores de red/5xx
         },
-        staleTime: 60 * 1000,
+        staleTime: 60_000, // 1 minuto por defecto
+        gcTime: 5 * 60_000, // 5 minutos en caché
+        refetchOnWindowFocus: false, // opcional según UX deseada
       },
       mutations: {
-        retry: false, // Mutations never retry by default
+        retry: false, // las mutations nunca se reintentan automáticamente
       },
     },
-  })
-  return { queryClient }
+  });
 }
 ```
 
-## Decision Tree
+---
 
+## Errores de DB: códigos de Postgres
+
+Referencia rápida para el handler de createServerFn:
+
+| Código PG | Significado           | AppError a usar                                          |
+| --------- | --------------------- | -------------------------------------------------------- |
+| `23505`   | Unique violation      | `ConflictError`                                          |
+| `23503`   | Foreign key violation | `ConflictError` o `NotFoundError`                        |
+| `23502`   | Not null violation    | `InternalError` (no debería llegar si validamos con Zod) |
+| `42P01`   | Tabla no existe       | `InternalError` (problema de migración)                  |
+| `53300`   | Too many connections  | `InternalError`                                          |
+
+```ts
+function handleDbError(error: unknown): never {
+  if (error && typeof error === "object" && "code" in error) {
+    const pgError = error as { code: string; detail?: string };
+    if (pgError.code === "23505")
+      throw new ConflictError("El recurso ya existe");
+    if (pgError.code === "23503")
+      throw new NotFoundError("Recurso relacionado");
+  }
+  console.error("[DB Error]", error);
+  throw new InternalError();
+}
 ```
-Is the error an input validation error?
-├── Yes → Use .validator(zodSchema). The client receives ZodError.
-│          Map error.issues to the form fields.
-└── No → Is it a business/DB/auth error?
-    ├── Yes → Throw AppError (or subclass) from the handler.
-    │          The client receives AppError with .code and .status.
-    └── No → Unexpected error. Log on the server, throw InternalError.
-              Client shows a generic message.
-```
 
-## What NOT to Do
+---
 
-- ❌ Do not manually wrap `ZodError` in `ValidationError`. You lose integration with TanStack Form.
-- ❌ Do not return `{ success: false, error: string }` from `createServerFn`. TanStack Start and Query expect `throw`.
-- ❌ Do not use generic `Error` on the server. Always throw `AppError` so the client can distinguish 4xx from 5xx.
-- ❌ Do not use `instanceof ZodError` for business errors. `ZodError` is for input validation only.
+## Resumen del modelo híbrido
 
-## Commands
-
-No specific commands. Verify consistency with:
-- `npm run check` — linting and formatting
-- `npm run test:server` — server function tests
-- `npm run test:client` — component and hook tests
-
-## Resources
-
-- **TanStack Start errors**: See [tanstack-start-best-practices](../tanstack-start-best-practices/SKILL.md)
-- **TanStack Query errors**: See [tanstack-query-best-practices](../tanstack-query-best-practices/SKILL.md)
+| Capa                   | Tipo de error          | Cuándo                       |
+| ---------------------- | ---------------------- | ---------------------------- |
+| `.validator(schema)`   | `ZodError`             | Input del usuario inválido   |
+| `.handler()`           | `AppError` (subclase)  | Lógica de negocio, DB, auth  |
+| QueryClient            | Configuración de retry | Errores de red, 5xx          |
+| Route `errorComponent` | UI de error específica | 404, errores de loader       |
+| Root `errorComponent`  | Fallback global        | Todo lo que no fue capturado |

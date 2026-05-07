@@ -1,5 +1,5 @@
 import { test, expect } from '../tests/fixture.server';
-import { todos } from './schema';
+import { todos } from './schemas';
 import { faker } from '@faker-js/faker';
 import { eq } from 'drizzle-orm';
 

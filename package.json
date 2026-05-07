@@ -23,6 +23,7 @@
   },
   "dependencies": {
     "@faker-js/faker": "^10.3.0",
+    "@paralleldrive/cuid2": "^3.3.0",
     "@t3-oss/env-core": "^0.13.10",
     "@tailwindcss/vite": "^4.1.18",
     "@tanstack/match-sorter-utils": "latest",
@@ -36,6 +37,7 @@
     "@tanstack/react-start": "latest",
     "@tanstack/react-table": "latest",
     "@tanstack/router-plugin": "^1.132.0",
+    "@tanstack/zod-form-adapter": "^0.42.1",
     "better-auth": "^1.5.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",

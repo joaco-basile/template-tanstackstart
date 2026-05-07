@@ -1,263 +1,369 @@
 ---
 name: project-architecture
 description: >
-  Project-specific architecture patterns for Feature-Sliced Design (FSD), global infrastructure layout,
-  component design, and routing/data loading. Trigger when scaffolding features, organizing code,
-  deciding where a file belongs, or designing component hierarchies.
+  Estructura global del proyecto, Feature-Sliced Design (FSD), reglas de importación,
+  diseño de componentes y escalado de features. Leer SIEMPRE antes de crear archivos
+  o carpetas nuevas, decidir dónde vive un archivo, o diseñar una feature desde cero.
 license: Apache-2.0
 metadata:
-  author: gentleman-programming
-  version: "1.0"
+  author: proyecto
+  version: "2.0"
 ---
 
-## When to Use
+## Árbol de decisión — empezá acá
 
-- Scaffolding a new feature or business domain.
-- Deciding where a new file belongs (feature vs global).
-- Designing component hierarchies (dumb vs smart).
-- Setting up routing, loaders, and data loading strategies.
-- Scaling a feature that has grown too large.
-
----
-
-## Core Philosophy
-
-### 1. Feature-Sliced Design (FSD)
-Group code by **business domain** (features) rather than by technical concern (components, hooks, services). If a developer needs to fix a bug in the "Users" logic, they should only need to open the `src/features/users/` folder.
-
-The golden rule is: **"Things that change together, live together."**
-
-### 2. Infrastructure Decoupling
-The `src/features/` folder is the heart of the application (Domain). Everything else (`src/lib/`, `src/db/`, `src/components/ui/`, `src/routes/`) exists ONLY to support the features.
-
-**Golden rule:** Infrastructure must be completely decoupled from Business Logic.
-
----
-
-## Global Architecture
-
-The project strictly follows this root structure. Do not invent new root folders without architectural consensus.
-
-```text
-src/
-├── components/          # Global, domain-agnostic UI
-│   ├── ui/              # Pure "dumb" atoms (Buttons, Inputs, Shadcn)
-│   ├── layouts/         # Page structures (Sidebar, Navbar)
-│   └── providers/       # Global contexts (QueryClient, Theme)
+```
+¿Dónde va este código?
 │
-├── db/                  # Database Infrastructure (Drizzle)
-│   ├── schemas/         # Table definitions (NO query logic here)
-│   ├── index.server.ts  # DB connection instance
-│   └── migrations/      # SQL migration files
+├── ¿Es reutilizable en cualquier proyecto sin modificar?
+│   └── → src/lib/  (utils puros, constantes globales)
 │
-├── features/            # 👑 BUSINESS LOGIC (See Feature Structure below)
+├── ¿Es infraestructura de DB?
+│   └── → src/db/schemas/ (definición de tabla)
+│       → src/features/<feature>/<feature>.server.ts (queries)
 │
-├── lib/                 # Pure Infrastructure & Utilities
-│   ├── utils.ts         # Pure functions (date formatting, cn for tailwind)
-│   ├── query-client.ts  # TanStack Query configuration
-│   └── constants.ts     # Global system constants
+├── ¿Es UI sin conocimiento del dominio? (Button, Input, Modal genérico)
+│   └── → src/components/ui/
 │
-├── middleware/          # TanStack Start server interceptors
-│   ├── auth.ts          # Session checking middleware
-│   └── logging.ts       # Request logging
+├── ¿Es lógica de negocio de un dominio específico?
+│   └── → src/features/<feature>/  ← la respuesta casi siempre es esta
 │
-├── routes/              # TanStack Router (Glue Code)
-│   ├── __root.tsx       # Master layout
-│   └── ...              # File-based routes
+├── ¿Es una ruta de URL?
+│   └── → src/routes/  (solo glue code, sin lógica)
 │
-└── env.ts               # Strict Zod environment variable validation
+└── ¿Es un interceptor de request cross-cutting? (auth, logging)
+    └── → src/middleware/
 ```
 
-### The 3 Golden Rules of Infrastructure
+---
 
-1. **`src/lib/` is NOT for business logic.** Never put business-specific functions (e.g., `calculateUserTaxes()`) in `lib`. `lib` is strictly for code that you could copy-paste into a completely different project without modifications.
+## Estructura global
 
-2. **Routes are just "Glue Code."** Files inside `src/routes/` MUST NOT contain complex UI or deep business logic. Their sole responsibility is to:
-   - Define the URL state (`validateSearch`).
-   - Define the loader (calling `ensureQueryData` or `defer`).
-   - Import and render the main Smart Component from `src/features/<feature>/components/`.
+```
+src/
+├── components/
+│   ├── ui/              # Átomos dumb (Shadcn + custom genéricos)
+│   ├── layouts/         # Shell de páginas (Sidebar, Navbar, etc.)
+│   └── providers/       # Contextos globales (QueryClient, Theme)
+│
+├── db/
+│   ├── schemas/         # SOLO definición de tablas. Nunca queries aquí.
+│   │   └── index.ts     # Re-exporta todo para que Drizzle lo lea
+│   ├── index.server.ts  # Instancia de conexión (nunca importar en cliente)
+│   └── migrations/      # Archivos SQL generados por Drizzle Kit
+│
+├── features/            # 👑 TODO el negocio vive aquí
+│
+├── lib/
+│   ├── utils.ts         # cn(), formatters, helpers puros
+│   ├── query-client.ts  # Configuración de TanStack Query
+│   └── constants.ts     # Constantes del sistema
+│
+├── middleware/
+│   ├── auth.ts          # Adjunta sesión al contexto de request
+│   └── logging.ts       # Request logging
+│
+├── routes/              # Glue code solamente
+│   ├── __root.tsx       # Layout raíz + providers
+│   └── ...
+│
+└── env.ts               # T3Env — validación estricta de variables de entorno
+```
 
-3. **Strict Environment Validation.** Always define and validate environment variables in `env.ts` using Zod. Do not use `process.env.XYZ` directly in application code without it passing through the typed `env` object.
+**Las 3 reglas de infraestructura que nunca se rompen:**
+
+1. `src/lib/` no tiene lógica de negocio. Si la función usa un concepto del dominio (usuario, producto, orden), no va en `lib/`.
+2. `src/routes/` no tiene UI compleja ni lógica. Solo importa el Smart Component del feature y define la URL.
+3. Variables de entorno siempre a través del objeto `env` importado de `@/env`.
 
 ---
 
-## Feature Structure Contract
+## Anatomía de un feature
 
-Every business domain or use case MUST live under `src/features/<feature-name>/`. A complete feature consists of 7 distinct parts, enforcing a clear boundary between Client, Server, and Validation.
+Cada feature es un directorio en `src/features/<nombre>/` con estos archivos:
 
-### The Anatomy of a Feature
+### `<feature>.ts` — tipos client-safe
 
-#### 1. `components/` — Domain-specific UI
-Contains all views, modals, and components that know about this specific feature.
-- Can import from `src/components/ui/` (dumb components).
-- Can import `queries`, `mutations`, and `schemas` from its own feature.
-- **NEVER** imports components from other features to avoid circular dependencies.
-
-#### 2. `<feature>.ts` — Client-Safe Types
-- Type definitions shared across client and server.
-- Types for API responses, flat rows, or basic domain structures.
 ```ts
+// src/features/users/users.ts
 export type UserRow = {
-  id: number;
+  id: string;
   email: string;
-  role: 'admin' | 'user';
+  role: "admin" | "member";
+  createdAt: Date;
+};
+
+export type UserFilters = {
+  role?: UserRow["role"];
+  search?: string;
 };
 ```
 
-#### 3. `<feature>.schema.ts` — Validation (Zod)
-- Schemas for inputs (Create, Update, Filters).
-- Must be client-safe (no node/DB imports) so they can be used in React Hook Form and Server Functions simultaneously.
+### `<feature>.schema.ts` — validación Zod (client-safe)
 
-#### 4. `<feature>.server.ts` — Database Logic (Server-Only)
-- Contains all Drizzle queries and DB interactions.
-- Returns plain objects or arrays (`Promise<UserRow>`).
-- **NEVER** imported by components or client files.
+```ts
+// src/features/users/users.schema.ts
+import { z } from "zod";
 
-#### 5. `<feature>.function.ts` — TanStack Start RPCs
-- Wraps the `.server.ts` logic in `createServerFn`.
-- Injects middlewares (e.g., authentication, permissions).
-- Uses `.validator()` pointing to the schemas in `<feature>.schema.ts`.
+export const createUserSchema = z.object({
+  email: z.string().email("Email inválido"),
+  role: z.enum(["admin", "member"]).default("member"),
+  password: z.string().min(8, "Mínimo 8 caracteres"),
+});
 
-#### 6. `<feature>.queries.ts` — Query Options
-- Contains all `queryOptions` factories for TanStack Query.
-- Imports the RPCs from `<feature>.function.ts`.
-- Defines Query Keys and Stale Times.
+export const updateUserSchema = createUserSchema
+  .partial()
+  .omit({ password: true });
 
-#### 7. `<feature>.mutations.ts` — Custom Hooks
-- Wraps mutations in `useMutation` hooks.
-- Handles cache invalidation for the feature's query keys automatically upon success.
+export const userFiltersSchema = z.object({
+  role: z.enum(["admin", "member"]).optional(),
+  search: z.string().optional(),
+  page: z.coerce.number().default(1),
+  limit: z.coerce.number().default(20),
+});
 
-### Strict Import Rules
+export type CreateUserInput = z.infer<typeof createUserSchema>;
+export type UpdateUserInput = z.infer<typeof updateUserSchema>;
+export type UserFiltersInput = z.infer<typeof userFiltersSchema>;
+```
 
-| File | Can import from |
-|------|-----------------|
-| `components/*` | Own `queries`, `mutations`, `schemas`, `types`. Global `src/components/ui`. |
-| `.ts` (types) | Any client-safe type file. |
-| `.schema.ts` | `zod`, shared constants. |
-| `.server.ts` | `db/`, `drizzle-orm`, server-only utils. |
-| `.function.ts` | `.server.ts`, `.schema.ts`, `middleware/`. |
-| `.queries.ts` | `.function.ts`, `lib/query-keys`. |
-| `.mutations.ts`| `.function.ts`, `lib/query-keys`. |
+### `<feature>.server.ts` — queries Drizzle (server-only)
+
+```ts
+// src/features/users/users.server.ts
+// ⚠️ NUNCA importar este archivo desde componentes o archivos cliente
+
+import { db } from "@/db/index.server";
+import { users } from "@/db/schemas/users";
+import { eq, ilike, and } from "drizzle-orm";
+import type { UserRow, UserFilters } from "./users";
+
+export async function getUsers(filters: UserFilters = {}): Promise<UserRow[]> {
+  const conditions = [];
+
+  if (filters.role) conditions.push(eq(users.role, filters.role));
+  if (filters.search)
+    conditions.push(ilike(users.email, `%${filters.search}%`));
+
+  return db
+    .select({
+      id: users.id,
+      email: users.email,
+      role: users.role,
+      createdAt: users.createdAt,
+    })
+    .from(users)
+    .where(conditions.length ? and(...conditions) : undefined);
+}
+
+export async function getUserById(id: string): Promise<UserRow | undefined> {
+  return db.query.users.findFirst({ where: eq(users.id, id) });
+}
+```
+
+### `<feature>.functions.ts` — RPCs con createServerFn
+
+```ts
+// src/features/users/users.functions.ts
+import { createServerFn } from "@tanstack/react-start";
+import { authMiddleware } from "@/middleware/auth";
+import { NotFoundError } from "@/lib/errors";
+import { getUsers, getUserById } from "./users.server";
+import { userFiltersSchema } from "./users.schema";
+
+export const getUsersFn = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
+  .validator(userFiltersSchema)
+  .handler(async ({ data }) => {
+    return getUsers(data);
+  });
+
+export const getUserByIdFn = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
+  .validator((id: string) => id)
+  .handler(async ({ data: id }) => {
+    const user = await getUserById(id);
+    if (!user) throw new NotFoundError("Usuario");
+    return user;
+  });
+```
+
+### `<feature>.queries.ts` — queryOptions factories
+
+```ts
+// src/features/users/users.queries.ts
+import { queryOptions } from "@tanstack/react-query";
+import { getUsersFn, getUserByIdFn } from "./users.functions";
+import type { UserFiltersInput } from "./users.schema";
+
+export const usersQueries = {
+  all: (filters: UserFiltersInput = {}) =>
+    queryOptions({
+      queryKey: ["users", "list", filters],
+      queryFn: () => getUsersFn({ data: filters }),
+      staleTime: 60_000,
+    }),
+
+  detail: (id: string) =>
+    queryOptions({
+      queryKey: ["users", "detail", id],
+      queryFn: () => getUserByIdFn({ data: id }),
+      staleTime: 60_000,
+    }),
+};
+```
+
+### `<feature>.mutations.ts` — useMutation hooks
+
+```ts
+// src/features/users/users.mutations.ts
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { createUserFn, deleteUserFn } from "./users.functions";
+
+export function useCreateUser() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (data: CreateUserInput) => createUserFn({ data }),
+    onSuccess: () => {
+      // Invalida todas las listas de usuarios
+      queryClient.invalidateQueries({ queryKey: ["users", "list"] });
+    },
+  });
+}
+
+export function useDeleteUser() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => deleteUserFn({ data: id }),
+    onSuccess: (_, id) => {
+      queryClient.invalidateQueries({ queryKey: ["users", "list"] });
+      queryClient.removeQueries({ queryKey: ["users", "detail", id] });
+    },
+  });
+}
+```
+
+### `components/` — UI del feature
+
+Smart components que conocen el dominio. Pueden importar queries, mutations, schemas y tipos del propio feature.
 
 ---
 
-## Component Design: Smart vs Dumb
+## Reglas de importación
 
-We DO NOT use strict Atomic Design (Atoms/Molecules/Organisms) as it creates friction and decision paralysis when mixed with Feature-Sliced Design. Instead, we use a pragmatic separation based on **Domain Knowledge**.
+| Archivo         | Puede importar desde                                                                              |
+| --------------- | ------------------------------------------------------------------------------------------------- |
+| `components/*`  | Propio feature (queries, mutations, schemas, tipos). `src/components/ui/`. Nunca de otro feature. |
+| `.ts` (tipos)   | Cualquier archivo client-safe.                                                                    |
+| `.schema.ts`    | `zod`, constantes. Nunca de DB ni server.                                                         |
+| `.server.ts`    | `@/db/`, `drizzle-orm`, utils server-only.                                                        |
+| `.functions.ts` | `.server.ts`, `.schema.ts`, `@/middleware/`.                                                      |
+| `.queries.ts`   | `.functions.ts`                                                                                   |
+| `.mutations.ts` | `.functions.ts`                                                                                   |
+| `src/routes/`   | `components/` del feature, `.queries.ts` para loaders.                                            |
 
-### 1. Global UI (`src/components/ui/`)
-**"Dumb Components"**
-- Purely visual, stateless (or only local UI state), and highly reusable (e.g., shadcn/ui components).
-- **Rule:** They know absolutely NOTHING about the business domain, database, or API.
-- Examples: `Button.tsx`, `DataTable.tsx`, `Modal.tsx`.
+**El error más común:** importar `.server.ts` desde un componente o desde `.queries.ts`. Vite lo va a reventar en build porque expone código Node al bundle del cliente.
 
-### 2. Feature UI (`src/features/<feature>/components/`)
-**"Smart Components"**
-- Highly tied to the business logic.
-- They fetch data, run mutations, and implement domain rules.
-- Examples: `UserListTable.tsx`, `CreateUserForm.tsx`.
+---
 
-### The Escalation Path (How to scale feature components)
+## Escalado de un feature
 
-When a feature grows, its `components/` folder can become messy. Follow this progression to keep it clean:
+### Fase 1: archivos planos (default)
 
-#### Phase 1: Flat Files
-Start simple. Keep all feature components as flat files.
-```text
-features/users/components/
-  UserList.tsx
-  CreateUserModal.tsx
+```
+features/users/
+  users.ts
+  users.schema.ts
+  users.server.ts
+  users.functions.ts
+  users.queries.ts
+  users.mutations.ts
+  components/
+    UserList.tsx
+    CreateUserModal.tsx
 ```
 
-#### Phase 2: Container / Presentational
-When a component gets too large (>200 lines) because it mixes complex React Hook Form state, useQuery, and JSX:
-Split it into logic (Container) and pure UI (Presentational).
-```text
-features/users/components/
-  UserList.tsx       (Container: Fetches data, passes props)
-  UserListView.tsx   (Presentational: Only renders JSX)
+### Fase 2: componente grande → Container/Presentational
+
+Cuando un componente supera ~200 líneas mezclando lógica y JSX:
+
+```
+components/
+  UserList.tsx       ← Container: fetching, estado, callbacks
+  UserListView.tsx   ← Presentational: solo JSX y props
 ```
 
-#### Phase 3: Co-location by Component
-When a component requires sub-components that are EXCLUSIVE to it, turn the component into a folder. Group by visual affinity, not by "size".
-```text
-features/users/components/
+### Fase 3: co-location por componente
+
+Cuando un componente tiene sub-componentes exclusivos suyos:
+
+```
+components/
   UserList/
-    index.tsx             (Main container)
-    UserListFilters.tsx   (Private sub-component)
-    UserListRow.tsx       (Private sub-component)
+    index.tsx
+    UserListRow.tsx
+    UserListFilters.tsx
   CreateUserModal.tsx
 ```
 
-#### Phase 4: Feature Splitting
-If a feature ends up with 20+ components and multiple sub-folders, it's no longer a single feature. It's a monolith.
-**Action:** Split the domain.
-Change `features/users/` into:
-- `features/user-management/`
-- `features/user-billing/`
-- `features/user-profile/`
+### Fase 4: split del feature
+
+Cuando el feature tiene 20+ componentes o lógicas muy distintas:
+
+```
+features/
+  user-profile/
+  user-billing/
+  user-permissions/
+```
 
 ---
 
-## Routing & Data Loading Patterns
+## Routes como glue code
 
-### 1. URL as Single Source of Truth
+```tsx
+// src/routes/users/index.tsx
+import { createFileRoute } from "@tanstack/react-router";
+import { usersQueries } from "@/features/users/users.queries";
+import { UserListPage } from "@/features/users/components/UserListPage";
 
-All table/list state (page, limit, search queries, active tabs, sorting) MUST live in the URL Search Params.
-
-**Why?**
-- Allows Deep-linking (users can share exact views).
-- Native back/forward browser navigation works out of the box.
-- Allows SSR data fetching because the server knows the state before rendering.
-
-**Implementation:**
-Use TanStack Router's `validateSearch` with a Zod schema in your route file, and read from it to feed your `queryOptions`. Never use `useState` for things that affect the main layout's data. Modals or ephemeral toggles CAN use local state.
-
-### 2. Data Loading: Critical vs Deferred
-
-TanStack Router + Query provides zero-waterfall data fetching, but we must choose the right strategy for UX.
-
-#### Strategy A: Critical Data (`await ensureQueryData`)
-Use this when the page CANNOT be rendered without this data (e.g., user permissions, the main entity being edited).
-- **Impact:** Blocks navigation. The user stays on the previous page until the fetch resolves.
-- **Code:**
-```ts
-loader: async ({ context: { queryClient }, params }) => {
-  // Await blocks navigation
-  await queryClient.ensureQueryData(usersQueries.detail(params.id));
-}
+export const Route = createFileRoute("/users/")({
+  validateSearch: userFiltersSchema, // URL como fuente de verdad del estado
+  loaderDeps: ({ search }) => search,
+  loader: async ({ context: { queryClient }, deps }) => {
+    // No await = deferred (no bloquea navegación)
+    queryClient.prefetchQuery(usersQueries.all(deps));
+  },
+  component: UserListPage,
+});
 ```
 
-#### Strategy B: Deferred Data (Non-blocking)
-Use this for slow data or secondary information (e.g., dashboard stats, related lists, comments).
-- **Impact:** Navigation is instant. The user sees the new page immediately, and a Skeleton/Spinner is shown while the data arrives.
-- **Code:**
-```ts
-loader: async ({ context: { queryClient }, params }) => {
-  // DO NOT await. Fire and forget.
-  queryClient.prefetchQuery(usersQueries.stats(params.id));
-}
-```
-In the component, use `useQuery` (which might be in `isLoading` state) instead of `useSuspenseQuery`.
+**Lo que NO va en un route file:**
 
-### 3. Server Middlewares (`beforeLoad`)
-
-Always use Route-level middlewares for Authentication and Authorization.
-- Use `beforeLoad` to check session state.
-- Throw `redirect()` to bounce unauthenticated users.
-- Return user data from `beforeLoad` so it becomes part of the Route Context, guaranteeing that loaders and components have typed access to the current user without refetching.
+- JSX complejo o formularios
+- Lógica de negocio
+- Queries directas a DB
+- Estado local de UI
 
 ---
 
-## Commands
+## Variables de entorno
 
-No specific commands. Verify consistency with:
-- `npm run check` — linting and formatting
-- `npm run test:server` — server function tests
-- `npm run test:client` — component and hook tests
+```ts
+// src/env.ts — definir AQUÍ, importar desde @/env en el resto
+import { createEnv } from "@t3-oss/env-core";
+import { z } from "zod";
 
-## Resources
-
-- **TanStack Start**: See [tanstack-start-best-practices](../tanstack-start-best-practices/SKILL.md)
-- **TanStack Router**: See [tanstack-router-best-practices](../tanstack-router-best-practices/SKILL.md)
-- **Database**: See [project-database](../project-database/SKILL.md)
+export const env = createEnv({
+  server: {
+    DATABASE_URL: z.string().url(),
+    BETTER_AUTH_SECRET: z.string().min(32),
+  },
+  client: {
+    VITE_APP_URL: z.string().url(),
+  },
+  runtimeEnv: typeof process !== "undefined" ? process.env : import.meta.env,
+});
+```

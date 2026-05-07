@@ -1,34 +1,84 @@
 # Agent Instructions
 
-This repository uses **TanStack Start** (React Router + React Query + Vite) for full-stack development, **Drizzle ORM** for database, **Better Auth** for authentication, and **Tailwind CSS v4**.
+Este repositorio usa **TanStack Start** (file-based routing + SSR) con **React**, **Drizzle ORM** para base de datos, **Better Auth** para autenticación, y **Tailwind CSS v4**.
+
+---
 
 ## Tooling & Commands
 
-- **Linting & Formatting**: This project uses **Biome**, not Prettier/ESLint.
-  - `npm run format` (applies formatting)
-  - `npm run lint` (runs lint rules)
-  - `npm run check` (runs both)
+Project use **pnpm** as package manager
 
-- **Testing**: Tests are split into two Vitest workspaces:
-  - **Client**: `npm run test:client` (uses `happy-dom`, runs `*.test.tsx`)
-  - **Server**: `npm run test:server` (uses `node`, runs `*.server.test.ts`, `*.schema.test.ts`, `src/lib/**/*.test.ts`)
-- **Database**: Drizzle ORM configured for PostgreSQL.
-  - `npm run db:generate` / `npm run db:migrate` / `npm run db:push`
-- **Shadcn UI**: Use `pnpm` to install components via the CLI:
-  - `pnpm dlx shadcn@latest add <component>`
+| Tarea                   | Comando                                       |
+| ----------------------- | --------------------------------------------- |
+| Linting + Formatting    | `pnpm run check` (Biome — NO Prettier/ESLint) |
+| Solo formato            | `pnpm run format`                             |
+| Solo lint               | `pnpm run lint`                               |
+| Tests cliente (DOM)     | `pnpm run test:client`                        |
+| Tests servidor (Node)   | `pnpm run test:server`                        |
+| Todos los tests         | `pnpm run test`                               |
+| Generar migración       | `pnpm run db:generate`                        |
+| Aplicar migraciones     | `pnpm run db:migrate`                         |
+| Push directo (dev only) | `pnpm run db:push`                            |
+| Build producción        | `pnpm run build`                              |
 
-## Architecture & Conventions
+**Reglas de tooling:**
 
-- **Environment Variables**: Managed via **T3Env** in `src/env.ts`. Do not use `process.env` directly; import `env` from `#/env` (or `@/env`). Client-side variables must be prefixed with `VITE_`.
-- **Imports**: The project supports path aliases `#/*` and `@/*` mapping to `./src/*`.
-- **Deployment**: Powered by **Nitro** as a generic server adapter (`npm run build` outputs a standalone node server at `dist/server/index.mjs`).
+- Usar **Biome** siempre. Nunca configurar Prettier o ESLint.
+- Path aliases: `@/*` y `#/*` → `./src/*`. Preferir `@/` por convención interna.
+- Variables de entorno: importar siempre desde `@/env`, nunca `process.env` directo.
+- Instalar componentes Shadcn con `pnpm dlx shadcn@latest add <component>`.
 
-## Skills
+---
 
-| Skill                    | Description                                                                                                                      | Location                                                     |
-| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
-| `project-architecture`   | Feature-Sliced Design (FSD), global infrastructure layout, component design, routing/data loading                                | [SKILL.md](.opencode/skills/project-architecture/SKILL.md)   |
-| `project-auth`           | Better Auth patterns: session management, route protection, server function auth, middleware                                     | [SKILL.md](.opencode/skills/project-auth/SKILL.md)           |
-| `project-database`       | Drizzle ORM + PostgreSQL: schema management, migrations, query patterns, test fixtures, isolated transactions                    | [SKILL.md](.opencode/skills/project-database/SKILL.md)       |
-| `project-error-handling` | Error handling patterns: AppError hierarchy, ZodError vs AppError hybrid model, route error boundaries, QueryClient retry config | [SKILL.md](.opencode/skills/project-error-handling/SKILL.md) |
-| `project-testing`        | Vitest workspaces, TDD, React Testing Library, MSW, fixtures, co-location                                                        | [SKILL.md](.opencode/skills/project-testing/SKILL.md)        |
+## Cómo elegir qué skill leer
+
+Antes de escribir cualquier código, determiná la naturaleza de tu tarea y leé **todas** las skills marcadas:
+
+| Si tu tarea involucra...                      | Leer estas skills                                     |
+| --------------------------------------------- | ----------------------------------------------------- |
+| Crear o reorganizar archivos/carpetas         | `project-architecture`                                |
+| Login, logout, sesión, rutas protegidas       | `project-architecture` + `project-auth`               |
+| Tablas de DB, queries, migraciones            | `project-database`                                    |
+| `createServerFn`, RPCs, validación de inputs  | `project-architecture` + `project-error-handling`     |
+| Errores en mutations, formularios, boundaries | `project-error-handling`                              |
+| `useQuery`, `useMutation`, cache, prefetch    | `project-tanstack`                                    |
+| Componentes UI, formularios, tablas, modales  | `project-ui`                                          |
+| Escribir o planificar tests                   | `project-testing` + skill del área testeada           |
+| Cualquier cosa nueva desde cero               | `project-architecture` primero, luego las específicas |
+
+> **Regla de oro:** cuando dudes, empezá con `project-architecture`. Define dónde vive cada cosa.
+
+---
+
+## Skills disponibles
+
+| Skill                    | Descripción                                                           | Archivo                                            |
+| ------------------------ | --------------------------------------------------------------------- | -------------------------------------------------- |
+| `project-architecture`   | FSD, estructura global, rutas de importación, escalado de features    | `.opencode/skills/project-architecture/SKILL.md`   |
+| `project-auth`           | Better Auth, sesiones, rutas protegidas, middleware, server functions | `.opencode/skills/project-auth/SKILL.md`           |
+| `project-database`       | Drizzle ORM, schemas, migraciones, queries, fixtures de test          | `.opencode/skills/project-database/SKILL.md`       |
+| `project-error-handling` | AppError, ZodError, boundaries, retry config, decision tree           | `.opencode/skills/project-error-handling/SKILL.md` |
+| `project-tanstack`       | TanStack Query + Router: queryOptions, mutations, loaders, prefetch   | `.opencode/skills/project-tanstack/SKILL.md`       |
+| `project-testing`        | Vitest workspaces, TDD, RTL, MSW, fixtures, contratos de test         | `.opencode/skills/project-testing/SKILL.md`        |
+| `project-ui`             | Shadcn/ui, Tailwind v4, formularios, tablas, convenciones visuales    | `.opencode/skills/project-ui/SKILL.md`             |
+
+---
+
+## Convenciones rápidas (siempre aplican)
+
+```
+src/features/<feature>/
+  <feature>.ts           → tipos compartidos (client-safe)
+  <feature>.schema.ts    → validación Zod (client-safe)
+  <feature>.server.ts    → queries Drizzle (server-only)
+  <feature>.functions.ts → createServerFn RPCs
+  <feature>.queries.ts   → queryOptions factories
+  <feature>.mutations.ts → useMutation hooks
+  components/            → UI del feature
+```
+
+- **Nunca** importar `.server.ts` desde componentes o archivos client.
+- **Nunca** poner lógica de negocio en `src/routes/` — solo glue code.
+- **Nunca** usar `process.env` directo — siempre `env` desde `#/env`.
+- **Siempre** tirar errores con `throw`, nunca retornar `{ success: false }`.
+- **Idiomas**: Todo el código (variables, funciones, schemas, tablas, nombres de archivos) DEBE estar en **inglés**. Solo la interfaz de usuario (textos visibles, copys, mensajes de error visibles para el usuario) DEBE estar en **español**.

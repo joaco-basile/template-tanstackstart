@@ -1,67 +1,85 @@
+import type { QueryClient } from "@tanstack/react-query";
 import {
-  HeadContent,
-  Scripts,
-  createRootRouteWithContext,
-} from '@tanstack/react-router'
-import { TanStackRouterDevtoolsPanel } from '@tanstack/react-router-devtools'
-import { TanStackDevtools } from '@tanstack/react-devtools'
+	createRootRouteWithContext,
+	Link,
+	Outlet,
+} from "@tanstack/react-router";
+import { HeaderUser } from "#/features/auth/components/HeaderUser";
+import { ErrorPage } from "@/components/layouts/ErrorPage";
+import { NotFoundPage } from "@/components/layouts/NotFoundPage";
+import { RootDocument } from "@/components/layouts/RootDocument";
 
-import TanStackQueryDevtools from '../integrations/tanstack-query/devtools'
+import appCss from "../styles.css?url";
 
-import appCss from '../styles.css?url'
-
-import type { QueryClient } from '@tanstack/react-query'
-
-interface MyRouterContext {
-  queryClient: QueryClient
+export interface MyRouterContext {
+	queryClient: QueryClient;
+	user?: {
+		id: string;
+		name: string;
+		email: string;
+		image: string | null;
+	};
 }
 
 export const Route = createRootRouteWithContext<MyRouterContext>()({
-  head: () => ({
-    meta: [
-      {
-        charSet: 'utf-8',
-      },
-      {
-        name: 'viewport',
-        content: 'width=device-width, initial-scale=1',
-      },
-      {
-        title: 'TanStack Start Starter',
-      },
-    ],
-    links: [
-      {
-        rel: 'stylesheet',
-        href: appCss,
-      },
-    ],
-  }),
-  shellComponent: RootDocument,
-})
+	notFoundComponent: NotFoundPage,
+	errorComponent: ErrorPage,
+	head: () => ({
+		meta: [
+			{
+				charSet: "utf-8",
+			},
+			{
+				name: "viewport",
+				content: "width=device-width, initial-scale=1",
+			},
+			{
+				title: "TanStack Start Starter",
+			},
+		],
+		links: [
+			{
+				rel: "stylesheet",
+				href: appCss,
+			},
+		],
+	}),
+	shellComponent: RootDocument,
+	component: RootLayout,
+});
 
-function RootDocument({ children }: { children: React.ReactNode }) {
-  return (
-    <html lang="en">
-      <head>
-        <HeadContent />
-      </head>
-      <body>
-        {children}
-        <TanStackDevtools
-          config={{
-            position: 'bottom-right',
-          }}
-          plugins={[
-            {
-              name: 'Tanstack Router',
-              render: <TanStackRouterDevtoolsPanel />,
-            },
-            TanStackQueryDevtools,
-          ]}
-        />
-        <Scripts />
-      </body>
-    </html>
-  )
+function RootLayout() {
+	return (
+		<div className="flex min-h-screen flex-col">
+			<header className="border-b bg-background">
+				<div className="container mx-auto flex h-14 items-center justify-between px-4">
+					<div className="flex items-center gap-6">
+						<Link to="/" className="font-semibold text-lg">
+							Starter
+						</Link>
+						<nav className="hidden md:flex items-center gap-4">
+							<Link
+								to="/todos"
+								className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+								activeProps={{ className: "text-foreground" }}
+							>
+								Tareas
+							</Link>
+							<Link
+								to="/dashboard"
+								className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+								activeProps={{ className: "text-foreground" }}
+							>
+								Dashboard
+							</Link>
+						</nav>
+					</div>
+					<HeaderUser />
+				</div>
+			</header>
+			<main className="flex-1">
+				<Outlet />
+			</main>
+		</div>
+	);
 }

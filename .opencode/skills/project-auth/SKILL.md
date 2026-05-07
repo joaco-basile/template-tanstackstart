@@ -1,178 +1,442 @@
 ---
 name: project-auth
 description: >
-  Project-specific authentication patterns using Better Auth. Covers session management,
-  route protection with beforeLoad, server function auth checks, middleware, and error handling.
-  Trigger when implementing login, logout, protected routes, session checks, or auth middleware.
+  Autenticación con Better Auth. Cubre setup del servidor y cliente, protección de rutas
+  con beforeLoad, verificación en server functions, middleware, manejo de sesiones expiradas,
+  y cómo testear auth. Leer cuando implementes login, logout, sign-up, rutas protegidas,
+  o cualquier verificación de identidad.
 license: Apache-2.0
 metadata:
-  author: gentleman-programming
-  version: "1.0"
+  author: proyecto
+  version: "2.0"
 ---
 
-## When to Use
+## Árbol de decisión — empezá acá
 
-- Implementing login, logout, sign-up, or password reset flows.
-- Protecting a route so only authenticated users can access it.
-- Checking session state inside a server function or middleware.
-- Handling `UnauthorizedError` or auth-related redirects.
-- Deciding where to place auth logic (route vs middleware vs server function).
-
-## Core Principle: Auth at the Boundary
-
-Authentication and authorization checks should happen as **early as possible** in the request lifecycle:
-
-1. **Route level** (`beforeLoad`) — cheapest. Prevents rendering entirely.
-2. **Middleware level** — for cross-cutting concerns (logging user ID, attaching context).
-3. **Server Function level** — final gatekeeper. Always verify inside `.handler()` if the operation is sensitive.
-
-Never rely solely on client-side checks. The client can be bypassed.
-
----
-
-## Better Auth Setup
-
-This project uses [Better Auth](https://www.better-auth.com/) for session management.
-
-### Server Instance (`src/lib/auth.ts`)
-
-```ts
-import { betterAuth } from 'better-auth'
-import { tanstackStartCookies } from 'better-auth/tanstack-start'
-
-export const auth = betterAuth({
-  emailAndPassword: {
-    enabled: true,
-  },
-  plugins: [tanstackStartCookies()],
-})
+```
+¿Qué necesitás hacer?
+│
+├── ¿Proteger una ruta de URL?
+│   └── → beforeLoad en el route file (ver sección "Protección de rutas")
+│
+├── ¿Verificar identidad dentro de una server function?
+│   └── → auth.api.getSession() en el handler (ver sección "Server Functions")
+│
+├── ¿Leer la sesión en un componente React?
+│   └── → authClient.useSession() (ver sección "Cliente")
+│
+├── ¿Adjuntar el usuario a múltiples rutas sin repetir?
+│   └── → authMiddleware (ver sección "Middleware")
+│
+└── ¿Manejar sesión expirada o token inválido?
+    └── → UnauthorizedError + redirect (ver sección "Sesiones expiradas")
 ```
 
-### API Route (`src/routes/api/auth/$.ts`)
+---
 
-Better Auth requires a catch-all route to handle its internal endpoints (login, logout, callback, etc.).
+## Principio fundamental
+
+**Auth en el boundary, lo más temprano posible:**
+
+1. **Route level** (`beforeLoad`) — bloquea antes de renderizar. Costo mínimo.
+2. **Middleware** — para adjuntar contexto cross-cutting, no para gatear acceso.
+3. **Server Function** — última línea de defensa. Siempre verificar en operaciones sensibles.
+
+Nunca confiar solo en checks del cliente. El cliente puede ser bypasseado.
+
+---
+
+## Setup
+
+### Servidor (`src/lib/auth.ts`)
 
 ```ts
-import { createFileRoute } from '@tanstack/react-router'
-import { auth } from '#/lib/auth'
+import { betterAuth } from "better-auth";
+import { drizzleAdapter } from "better-auth/adapters/drizzle";
+import { tanstackStartCookies } from "better-auth/tanstack-start";
+import { db } from "@/db/index.server";
+import * as schema from "@/db/schemas";
 
-export const Route = createFileRoute('/api/auth/$')({
+export const auth = betterAuth({
+  database: drizzleAdapter(db, {
+    provider: "pg",
+    schema: {
+      user: schema.users,
+      session: schema.sessions,
+      account: schema.accounts,
+      verification: schema.verifications,
+    },
+  }),
+  emailAndPassword: {
+    enabled: true,
+    requireEmailVerification: false, // cambiar a true en producción
+  },
+  plugins: [tanstackStartCookies()],
+  trustedOrigins: [env.VITE_APP_URL],
+});
+
+// Tipos derivados del servidor para usar en todo el proyecto
+export type Session = typeof auth.$Infer.Session;
+export type User = typeof auth.$Infer.Session.user;
+```
+
+### Ruta catch-all para Better Auth (`src/routes/api/auth/$.ts`)
+
+```ts
+import { createFileRoute } from "@tanstack/react-router";
+import { auth } from "@/lib/auth";
+
+export const Route = createFileRoute("/api/auth/$")({
   server: {
     handlers: {
       GET: ({ request }) => auth.handler(request),
       POST: ({ request }) => auth.handler(request),
     },
   },
-})
+});
 ```
 
-### Client Hook (`src/lib/auth-client.ts`)
+### Cliente (`src/lib/auth-client.ts`)
 
 ```ts
-import { createAuthClient } from 'better-auth/react'
+import { createAuthClient } from "better-auth/react";
+import { env } from "@/env";
 
-export const authClient = createAuthClient()
+export const authClient = createAuthClient({
+  baseURL: env.VITE_APP_URL,
+});
+
+// Re-exportar para facilitar imports
+export const { signIn, signUp, signOut, useSession, getSession } = authClient;
 ```
-
-Use `authClient.useSession()` in components to reactively track auth state.
 
 ---
 
-## Route Protection (`beforeLoad`)
+## Middleware (`src/middleware/auth.ts`)
 
-Always use route-level `beforeLoad` for auth guards. This is the earliest point in the lifecycle.
+El middleware **adjunta** el usuario al contexto. No redirige ni bloquea — eso es responsabilidad de `beforeLoad`.
 
 ```ts
-import { createFileRoute, redirect } from '@tanstack/react-router'
+import { createMiddleware } from "@tanstack/react-start";
+import { auth } from "@/lib/auth";
+import type { User } from "@/lib/auth";
 
-export const Route = createFileRoute('/dashboard')({
+export const authMiddleware = createMiddleware().server(
+  async ({ request, next }) => {
+    const session = await auth.api.getSession({ headers: request.headers });
+
+    return next({
+      context: {
+        user: session?.user ?? null,
+        session: session?.session ?? null,
+      },
+    });
+  },
+);
+```
+
+Registrar en `src/middleware/index.ts` y adjuntar al router.
+
+---
+
+## Protección de rutas
+
+### Ruta que requiere autenticación
+
+```ts
+// src/routes/dashboard/index.tsx
+import { createFileRoute, redirect } from "@tanstack/react-router";
+import { getSession } from "@/lib/auth-client";
+
+export const Route = createFileRoute("/dashboard/")({
   beforeLoad: async ({ context }) => {
-    const session = await context.queryClient.fetchQuery({
-      queryKey: ['auth', 'session'],
-      queryFn: () => authClient.getSession(),
-    })
+    // Usar el contexto del middleware si está disponible
+    const user = context.user;
 
-    if (!session?.user) {
-      throw redirect({ to: '/login' })
+    if (!user) {
+      throw redirect({ to: "/login", search: { redirect: location.href } });
     }
 
-    // Return user so it becomes typed route context
-    return { user: session.user }
+    // Lo que retornás se vuelve parte del context tipado para loaders y componentes
+    return { user };
   },
-})
+  loader: async ({ context }) => {
+    // context.user está tipado gracias al return de beforeLoad
+    console.log("Usuario autenticado:", context.user.email);
+  },
+  component: DashboardPage,
+});
 ```
 
-**Why `beforeLoad`?**
-- It runs before the loader, so unauthenticated users never trigger data fetches.
-- The returned context is typed and available to all child routes.
-
----
-
-## Server Function Auth
-
-Inside `createServerFn` handlers, always verify the session if the operation is sensitive.
+### Ruta que requiere un rol específico
 
 ```ts
-import { createServerFn } from '@tanstack/react-start'
-import { auth } from '#/lib/auth'
-import { UnauthorizedError } from '#/lib/errors'
+import { UnauthorizedError } from "@/lib/errors";
 
-export const deleteAccount = createServerFn({ method: 'POST' })
-  .handler(async ({ request }) => {
-    const session = await auth.api.getSession({ headers: request.headers })
-    if (!session) throw new UnauthorizedError()
-
-    // ... proceed with deletion
-  })
+beforeLoad: async ({ context }) => {
+  if (!context.user) throw redirect({ to: "/login" });
+  if (context.user.role !== "admin")
+    throw new UnauthorizedError("Solo administradores");
+  return { user: context.user };
+};
 ```
 
----
-
-## Auth Middleware (`src/middleware/`)
-
-Use middleware for cross-cutting auth concerns (attaching user to context, logging) rather than gating access. Gating belongs in `beforeLoad`.
+### Ruta que redirige si YA está autenticado (login, sign-up)
 
 ```ts
-// src/middleware/auth.ts
-import { createMiddleware } from '@tanstack/react-start'
-
-export const authMiddleware = createMiddleware().server(async ({ request, next }) => {
-  const session = await auth.api.getSession({ headers: request.headers })
-  return next({ context: { user: session?.user ?? null } })
-})
+beforeLoad: async ({ context }) => {
+  if (context.user) {
+    throw redirect({ to: "/dashboard" });
+  }
+};
 ```
 
 ---
 
-## Error Handling
+## Server Functions
 
-Use the project's `UnauthorizedError` for auth failures. Do not throw generic `Error` or return `{ success: false }`.
+Siempre verificar sesión en server functions que mutan datos o retornan datos sensibles:
 
 ```ts
-import { UnauthorizedError } from '#/lib/errors'
+// src/features/users/users.functions.ts
+import { createServerFn } from "@tanstack/react-start";
+import { authMiddleware } from "@/middleware/auth";
+import { UnauthorizedError } from "@/lib/errors";
 
-if (!session) throw new UnauthorizedError()
+export const deleteAccountFn = createServerFn({ method: "POST" })
+  .middleware([authMiddleware]) // ← adjunta context.user
+  .handler(async ({ context }) => {
+    // El middleware garantiza que context.user existe O es null
+    if (!context.user) throw new UnauthorizedError();
+
+    await deleteUser(context.user.id);
+  });
 ```
 
-On the client, catch `AppError` instances and handle `UNAUTHORIZED` code appropriately (redirect to login, show toast, etc.).
+**Cuándo verificar manualmente vs confiar en el middleware:**
+
+- Si la server function usa `authMiddleware` → el contexto ya tiene `user`. Verificar que no es `null`.
+- Si la server function NO usa `authMiddleware` → llamar a `auth.api.getSession()` manualmente.
+
+```ts
+// Sin middleware — verificación manual
+export const sensitiveFn = createServerFn({ method: "POST" }).handler(
+  async ({ request }) => {
+    const session = await auth.api.getSession({ headers: request.headers });
+    if (!session?.user) throw new UnauthorizedError();
+    // ...
+  },
+);
+```
 
 ---
 
-## Cookie Security
+## Flujos de autenticación en el cliente
 
-Better Auth with `tanstackStartCookies()` handles secure cookie settings automatically. Do not manually configure cookie flags unless you have a specific reason.
+### Sign-in con email/password
 
-Ensure `SERVER_URL` environment variable is set correctly in production so cookie domains work as expected.
+```tsx
+// src/features/auth/components/LoginForm.tsx
+import { signIn } from "@/lib/auth-client";
+import { useRouter } from "@tanstack/react-router";
+
+export function LoginForm() {
+  const router = useRouter();
+
+  async function handleSubmit(data: LoginInput) {
+    const result = await signIn.email({
+      email: data.email,
+      password: data.password,
+    });
+
+    if (result.error) {
+      // Better Auth retorna errores tipados
+      form.setError("root", { message: result.error.message });
+      return;
+    }
+
+    // Invalidar el contexto del router para refrescar la sesión
+    await router.invalidate();
+    router.navigate({ to: "/dashboard" });
+  }
+}
+```
+
+### Sign-up
+
+```tsx
+const result = await signUp.email({
+  email: data.email,
+  password: data.password,
+  name: data.name,
+});
+
+if (result.error) {
+  // Manejar error (email duplicado, contraseña débil, etc.)
+}
+```
+
+### Sign-out
+
+```tsx
+async function handleLogout() {
+  await signOut();
+  await router.invalidate();
+  router.navigate({ to: "/login" });
+}
+```
+
+### Leer sesión en un componente
+
+```tsx
+import { useSession } from "@/lib/auth-client";
+
+function UserAvatar() {
+  const { data: session, isPending } = useSession();
+
+  if (isPending) return <Skeleton />;
+  if (!session) return null;
+
+  return <Avatar src={session.user.image} name={session.user.name} />;
+}
+```
 
 ---
 
-## Commands
+## Sesiones expiradas
 
-No specific commands. Verify consistency with:
-- `npm run check` — linting and formatting
-- `npm run test:server` — server function tests
+Cuando la sesión expira mientras el usuario está usando la app, las server functions van a retornar `UnauthorizedError`. Configurar el QueryClient para manejar esto globalmente:
 
-## Resources
+```ts
+// src/lib/query-client.ts
+import { QueryClient } from "@tanstack/react-query";
+import { AppError } from "@/lib/errors";
 
-- **Error Handling**: See [project-error-handling](../project-error-handling/SKILL.md) for `AppError` hierarchy and server/client error mapping.
-- **TanStack Start**: See [tanstack-start-best-practices](../tanstack-start-best-practices/SKILL.md) for middleware and server function patterns.
+export function createQueryClient() {
+  return new QueryClient({
+    defaultOptions: {
+      queries: {
+        retry: (failureCount, error) => {
+          // No reintentar errores 401 — la sesión expiró, redirigir
+          if (error instanceof AppError && error.status === 401) return false;
+          return failureCount < 2;
+        },
+      },
+    },
+  });
+}
+```
+
+En el error boundary global o en el root provider, interceptar el 401:
+
+```tsx
+// src/routes/__root.tsx
+const queryClient = createQueryClient();
+
+queryClient.getQueryCache().subscribe((event) => {
+  if (event.type === "observerResultsUpdated") {
+    const error = event.query.state.error;
+    if (error instanceof AppError && error.status === 401) {
+      // Redirigir al login preservando la URL actual
+      router.navigate({
+        to: "/login",
+        search: { redirect: location.pathname },
+      });
+    }
+  }
+});
+```
+
+---
+
+## Testing de auth
+
+### Mock de sesión en tests de servidor
+
+```ts
+// src/tests/helpers/auth.ts
+import { vi } from "vitest";
+import { auth } from "@/lib/auth";
+
+export function mockAuthenticatedUser(overrides: Partial<User> = {}) {
+  const mockUser: User = {
+    id: "test-user-id",
+    email: "test@example.com",
+    name: "Test User",
+    role: "member",
+    emailVerified: true,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    ...overrides,
+  };
+
+  vi.spyOn(auth.api, "getSession").mockResolvedValue({
+    user: mockUser,
+    session: {
+      id: "test-session",
+      userId: mockUser.id,
+      expiresAt: new Date(Date.now() + 86400000),
+    },
+  });
+
+  return mockUser;
+}
+
+export function mockUnauthenticated() {
+  vi.spyOn(auth.api, "getSession").mockResolvedValue(null);
+}
+```
+
+### Test de server function protegida
+
+```ts
+// src/features/users/users.functions.server.test.ts
+import { describe, test, expect, beforeEach } from "vitest";
+import {
+  mockAuthenticatedUser,
+  mockUnauthenticated,
+} from "@/tests/helpers/auth";
+import { deleteAccountFn } from "./users.functions";
+
+describe("deleteAccountFn", () => {
+  test("lanza UnauthorizedError si no hay sesión", async () => {
+    mockUnauthenticated();
+    await expect(deleteAccountFn({ data: undefined })).rejects.toMatchObject({
+      code: "UNAUTHORIZED",
+    });
+  });
+
+  test("ejecuta si el usuario está autenticado", async () => {
+    mockAuthenticatedUser({ id: "user-123" });
+    // ... test de la lógica real
+  });
+});
+```
+
+### Test de componente con sesión
+
+```tsx
+// Usar MSW para mockear /api/auth/get-session
+import { http, HttpResponse } from "msw";
+
+const handlers = [
+  http.get("/api/auth/get-session", () => {
+    return HttpResponse.json({
+      user: { id: "1", email: "test@example.com", name: "Test" },
+      session: { id: "session-1" },
+    });
+  }),
+];
+```
+
+---
+
+## Errores comunes
+
+| ❌ Antipatrón                                  | ✅ Corrección                                           |
+| ---------------------------------------------- | ------------------------------------------------------- |
+| Verificar auth solo en el cliente              | Siempre verificar en `beforeLoad` y en server functions |
+| Retornar `{ error: 'Unauthorized' }`           | Tirar `throw new UnauthorizedError()`                   |
+| Usar `useState` para la sesión                 | Usar `useSession()` de auth-client                      |
+| Guardar el token en localStorage               | Better Auth maneja cookies automáticamente              |
+| No invalidar el router después de login/logout | Llamar `router.invalidate()` para refrescar contexto    |
