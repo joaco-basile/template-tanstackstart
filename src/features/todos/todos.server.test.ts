@@ -1,6 +1,6 @@
 import { faker } from "@faker-js/faker";
 import { describe, expect } from "vitest";
-import { test as fixtureTest } from "#/tests/fixture.server";
+import { test as fixtureTest } from "@/tests/fixture.server";
 import {
 	createTodo,
 	deleteTodo,
@@ -12,7 +12,10 @@ import {
 
 describe("todos.server", () => {
 	fixtureTest("createTodo creates a todo", async ({ db }) => {
-		const todo = await createTodo({ title: faker.lorem.sentence(), status: "pending" }, db);
+		const todo = await createTodo(
+			{ title: faker.lorem.sentence(), status: "pending" },
+			db,
+		);
 		expect(todo).toMatchObject({
 			id: expect.any(String),
 			title: expect.any(String),
@@ -29,7 +32,10 @@ describe("todos.server", () => {
 	});
 
 	fixtureTest("getTodoById returns a todo", async ({ db }) => {
-		const created = await createTodo({ title: faker.lorem.sentence(), status: "pending" }, db);
+		const created = await createTodo(
+			{ title: faker.lorem.sentence(), status: "pending" },
+			db,
+		);
 		const todo = await getTodoById(created.id, db);
 		expect(todo).toMatchObject({ id: created.id, title: created.title });
 	});
@@ -40,7 +46,10 @@ describe("todos.server", () => {
 	});
 
 	fixtureTest("updateTodo updates a todo", async ({ db }) => {
-		const created = await createTodo({ title: "Original title", status: "pending" }, db);
+		const created = await createTodo(
+			{ title: "Original title", status: "pending" },
+			db,
+		);
 		const updated = await updateTodo(
 			created.id,
 			{ title: "Updated title", status: "completed" },
@@ -54,7 +63,10 @@ describe("todos.server", () => {
 	});
 
 	fixtureTest("deleteTodo removes a todo", async ({ db }) => {
-		const created = await createTodo({ title: "To be deleted", status: "pending" }, db);
+		const created = await createTodo(
+			{ title: "To be deleted", status: "pending" },
+			db,
+		);
 		await deleteTodo(created.id, db);
 		const todo = await getTodoById(created.id, db);
 		expect(todo).toBeNull();

@@ -1,9 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { TodoListPage } from "#/features/todos/components/TodoListPage";
-import { todosQueries } from "#/features/todos/todos.queries";
-import { todoFiltersSchema } from "#/features/todos/todos.schema";
+import { TodoListPage } from "@/features/todos/components/TodoListPage";
+import { todosQueries } from "@/features/todos/todos.queries";
+import { todoFiltersSchema } from "@/features/todos/todos.schema";
 
-export const Route = createFileRoute("/todos/")({
+export const Route = createFileRoute("/_authed/todos/")({
 	validateSearch: todoFiltersSchema,
 	loaderDeps: ({ search }) => search,
 	loader: async ({ context: { queryClient }, deps }) => {

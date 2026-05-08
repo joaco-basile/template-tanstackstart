@@ -1,9 +1,9 @@
 "use client";
 
 import { Link } from "@tanstack/react-router";
-import { Button } from "#/components/ui/button";
-import { useSignOut } from "#/features/auth/auth.mutations";
-import { authClient } from "#/lib/auth-client";
+import { Button } from "@/components/ui/button";
+import { useSignOut } from "@/features/auth/auth.mutations";
+import { authClient } from "@/lib/auth-client";
 
 export function HeaderUser() {
 	const { data: session, isPending } = authClient.useSession();

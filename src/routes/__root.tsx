@@ -4,10 +4,10 @@ import {
 	Link,
 	Outlet,
 } from "@tanstack/react-router";
-import { HeaderUser } from "#/features/auth/components/HeaderUser";
 import { ErrorPage } from "@/components/layouts/ErrorPage";
 import { NotFoundPage } from "@/components/layouts/NotFoundPage";
 import { RootDocument } from "@/components/layouts/RootDocument";
+import { HeaderUser } from "@/features/auth/components/HeaderUser";
 
 import appCss from "../styles.css?url";
 

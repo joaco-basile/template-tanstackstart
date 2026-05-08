@@ -9,9 +9,9 @@ import {
 	AlertDialogFooter,
 	AlertDialogHeader,
 	AlertDialogTitle,
-} from "#/components/ui/alert-dialog";
-import type { Todo } from "#/features/todos/todos";
-import { useDeleteTodo } from "#/features/todos/todos.mutations";
+} from "@/components/ui/alert-dialog";
+import type { Todo } from "@/features/todos/todos";
+import { useDeleteTodo } from "@/features/todos/todos.mutations";
 
 interface DeleteTodoDialogProps {
 	todo: Todo | null;

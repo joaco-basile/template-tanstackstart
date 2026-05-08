@@ -1,18 +1,19 @@
 "use client";
 
-import { useState } from "react";
 import { useForm } from "@tanstack/react-form";
-import { useRouter } from "@tanstack/react-router";
-import { Button } from "#/components/ui/button";
-import { Input } from "#/components/ui/input";
-import { Label } from "#/components/ui/label";
-import { useSignIn } from "#/features/auth/auth.mutations";
-import { loginSchema } from "#/features/auth/auth.schema";
-import type { LoginInput } from "#/features/auth/auth.schema";
+import { useRouter, useSearch } from "@tanstack/react-router";
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { useSignIn } from "@/features/auth/auth.mutations";
+import type { LoginInput } from "@/features/auth/auth.schema";
+import { loginSchema } from "@/features/auth/auth.schema";
 
 export function LoginForm() {
 	const signIn = useSignIn();
 	const router = useRouter();
+	const search = useSearch({ from: "/login" });
 	const [rootError, setRootError] = useState<string | null>(null);
 
 	const form = useForm({
@@ -30,7 +31,9 @@ export function LoginForm() {
 				setRootError(result.error.message ?? "Error al iniciar sesión");
 				return;
 			}
-			router.navigate({ to: "/dashboard" });
+			await router.navigate({
+				to: search.redirect ?? "/dashboard",
+			});
 		},
 	});
 
@@ -87,15 +90,9 @@ export function LoginForm() {
 				)}
 			</form.Field>
 
-			{rootError && (
-				<p className="text-destructive text-sm">{rootError}</p>
-			)}
+			{rootError && <p className="text-destructive text-sm">{rootError}</p>}
 
-			<Button
-				type="submit"
-				className="w-full"
-				disabled={signIn.isPending}
-			>
+			<Button type="submit" className="w-full" disabled={signIn.isPending}>
 				{signIn.isPending ? "Iniciando sesión..." : "Iniciar sesión"}
 			</Button>
 		</form>

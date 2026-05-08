@@ -24,7 +24,7 @@ Project use **pnpm** as package manager
 **Reglas de tooling:**
 
 - Usar **Biome** siempre. Nunca configurar Prettier o ESLint.
-- Path aliases: `@/*` y `#/*` → `./src/*`. Preferir `@/` por convención interna.
+- Path aliases: `@/*` → `./src/*`. usar siempre `@/` por convención interna.
 - Variables de entorno: importar siempre desde `@/env`, nunca `process.env` directo.
 - Instalar componentes Shadcn con `pnpm dlx shadcn@latest add <component>`.
 
@@ -79,6 +79,6 @@ src/features/<feature>/
 
 - **Nunca** importar `.server.ts` desde componentes o archivos client.
 - **Nunca** poner lógica de negocio en `src/routes/` — solo glue code.
-- **Nunca** usar `process.env` directo — siempre `env` desde `#/env`.
+- **Nunca** usar `process.env` directo — siempre `env` desde `@/lib/env/client` para variables del cliente y `@/lib/env/server` para variables del servidor.
 - **Siempre** tirar errores con `throw`, nunca retornar `{ success: false }`.
 - **Idiomas**: Todo el código (variables, funciones, schemas, tablas, nombres de archivos) DEBE estar en **inglés**. Solo la interfaz de usuario (textos visibles, copys, mensajes de error visibles para el usuario) DEBE estar en **español**.

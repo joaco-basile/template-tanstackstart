@@ -1,5 +1,5 @@
-import { pgTable, text, timestamp, pgEnum } from "drizzle-orm/pg-core";
 import { createId } from "@paralleldrive/cuid2";
+import { pgEnum, pgTable, text, timestamp } from "drizzle-orm/pg-core";
 
 export const todoStatusEnum = pgEnum("todo_status", ["pending", "completed"]);
 

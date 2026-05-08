@@ -1,11 +1,10 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
-import { authClient } from "#/lib/auth-client";
+import { authClient } from "@/lib/auth-client";
 import type { LoginInput, SignupInput } from "./auth.schema";
 
 export function useSignIn() {
 	const queryClient = useQueryClient();
-	const router = useRouter();
 
 	return useMutation({
 		mutationFn: (data: LoginInput) =>
@@ -15,14 +14,12 @@ export function useSignIn() {
 			}),
 		onSuccess: () => {
 			queryClient.invalidateQueries({ queryKey: ["auth", "session"] });
-			router.invalidate();
 		},
 	});
 }
 
 export function useSignUp() {
 	const queryClient = useQueryClient();
-	const router = useRouter();
 
 	return useMutation({
 		mutationFn: (data: SignupInput) =>
@@ -33,7 +30,9 @@ export function useSignUp() {
 			}),
 		onSuccess: () => {
 			queryClient.invalidateQueries({ queryKey: ["auth", "session"] });
-			router.invalidate();
+		},
+		onError: (e) => {
+			console.log("Error al hacer singup", e);
 		},
 	});
 }
@@ -47,7 +46,9 @@ export function useSignOut() {
 		onSuccess: () => {
 			queryClient.invalidateQueries({ queryKey: ["auth", "session"] });
 			queryClient.removeQueries({ queryKey: ["auth", "session"] });
-			router.invalidate();
+			router.invalidate().then(() => {
+				router.navigate({ to: "/login" });
+			});
 		},
 	});
 }

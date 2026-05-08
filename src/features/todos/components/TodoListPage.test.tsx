@@ -1,13 +1,13 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, test, vi } from "vitest";
-import { createTestWrapper } from "#/tests/utils";
+import { createTestWrapper } from "@/tests/utils";
 
 vi.mock("@tanstack/react-router", () => ({
 	useSearch: () => ({}),
 	useNavigate: () => () => {},
 }));
 
-vi.mock("#/features/todos/todos.queries", () => ({
+vi.mock("@/features/todos/todos.queries", () => ({
 	todosQueries: {
 		list: () => ({
 			queryKey: ["todos", "list"],
@@ -16,7 +16,7 @@ vi.mock("#/features/todos/todos.queries", () => ({
 	},
 }));
 
-vi.mock("#/features/todos/todos.mutations", () => ({
+vi.mock("@/features/todos/todos.mutations", () => ({
 	useCreateTodo: () => ({
 		mutateAsync: vi.fn(),
 		isPending: false,

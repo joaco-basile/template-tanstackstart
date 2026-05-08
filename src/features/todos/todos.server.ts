@@ -1,7 +1,7 @@
 import { and, count, desc, eq, ilike } from "drizzle-orm";
-import type { DB } from "#/db/index.server";
-import { db } from "#/db/index.server";
-import { todos } from "#/db/schemas";
+import type { DB } from "@/db/index.server";
+import { db } from "@/db/index.server";
+import { todos } from "@/db/schemas";
 import type { TodoFilters } from "./todos";
 import type { CreateTodoInput, UpdateTodoInput } from "./todos.schema";
 

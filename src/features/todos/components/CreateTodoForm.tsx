@@ -1,21 +1,21 @@
 "use client";
 
-import { useState } from "react";
 import { useForm } from "@tanstack/react-form";
-import { Button } from "#/components/ui/button";
-import { Input } from "#/components/ui/input";
-import { Label } from "#/components/ui/label";
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
 	Select,
 	SelectContent,
 	SelectItem,
 	SelectTrigger,
 	SelectValue,
-} from "#/components/ui/select";
-import { Textarea } from "#/components/ui/textarea";
-import { useCreateTodo } from "#/features/todos/todos.mutations";
-import type { CreateTodoInput } from "#/features/todos/todos.schema";
-import { createTodoSchema } from "#/features/todos/todos.schema";
+} from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { useCreateTodo } from "@/features/todos/todos.mutations";
+import type { CreateTodoInput } from "@/features/todos/todos.schema";
+import { createTodoSchema } from "@/features/todos/todos.schema";
 
 interface CreateTodoFormProps {
 	onSuccess: () => void;
@@ -71,9 +71,7 @@ export function CreateTodoForm({ onSuccess }: CreateTodoFormProps) {
 							placeholder="Título de la tarea"
 						/>
 						{fieldErrors.title && (
-							<p className="text-destructive text-sm">
-								{fieldErrors.title}
-							</p>
+							<p className="text-destructive text-sm">{fieldErrors.title}</p>
 						)}
 					</div>
 				)}

@@ -7,9 +7,9 @@ import {
 } from "@tanstack/react-table";
 import { Pencil, Trash2 } from "lucide-react";
 import { useState } from "react";
-import { Badge } from "#/components/ui/badge";
-import { Button } from "#/components/ui/button";
-import { Skeleton } from "#/components/ui/skeleton";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
 	Table,
 	TableBody,
@@ -17,8 +17,8 @@ import {
 	TableHead,
 	TableHeader,
 	TableRow,
-} from "#/components/ui/table";
-import type { Todo } from "#/features/todos/todos";
+} from "@/components/ui/table";
+import type { Todo } from "@/features/todos/todos";
 
 interface TodosTableProps {
 	todos: Todo[];

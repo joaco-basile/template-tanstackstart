@@ -4,17 +4,17 @@ import { useQuery } from "@tanstack/react-query";
 import { useSearch } from "@tanstack/react-router";
 import { Plus } from "lucide-react";
 import { useState } from "react";
-import { Button } from "#/components/ui/button";
+import { Button } from "@/components/ui/button";
 import {
 	Dialog,
 	DialogContent,
 	DialogHeader,
 	DialogTitle,
 	DialogTrigger,
-} from "#/components/ui/dialog";
-import type { Todo } from "#/features/todos/todos";
-import { todosQueries } from "#/features/todos/todos.queries";
-import type { TodoFiltersInput } from "#/features/todos/todos.schema";
+} from "@/components/ui/dialog";
+import type { Todo } from "@/features/todos/todos";
+import { todosQueries } from "@/features/todos/todos.queries";
+import type { TodoFiltersInput } from "@/features/todos/todos.schema";
 import { CreateTodoForm } from "./CreateTodoForm";
 import { DeleteTodoDialog } from "./DeleteTodoDialog";
 import { EditTodoSheet } from "./EditTodoSheet";
@@ -22,7 +22,7 @@ import { TodoFilters } from "./TodoFilters";
 import { TodosTable } from "./TodosTable";
 
 export function TodoListPage() {
-	const search = useSearch({ from: "/todos/" }) as TodoFiltersInput;
+	const search = useSearch({ strict: false }) as TodoFiltersInput;
 	const [createOpen, setCreateOpen] = useState(false);
 	const [editTodo, setEditTodo] = useState<Todo | null>(null);
 	const [deleteTodo, setDeleteTodo] = useState<Todo | null>(null);

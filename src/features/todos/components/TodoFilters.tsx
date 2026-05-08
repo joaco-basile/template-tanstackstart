@@ -1,19 +1,19 @@
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import type { z } from "zod";
-import { Input } from "#/components/ui/input";
+import { Input } from "@/components/ui/input";
 import {
 	Select,
 	SelectContent,
 	SelectItem,
 	SelectTrigger,
 	SelectValue,
-} from "#/components/ui/select";
-import type { todoFiltersSchema } from "#/features/todos/todos.schema";
+} from "@/components/ui/select";
+import type { todoFiltersSchema } from "@/features/todos/todos.schema";
 
 type Filters = z.infer<typeof todoFiltersSchema>;
 
 export function TodoFilters() {
-	const search = useSearch({ from: "/todos/" }) as Filters;
+	const search = useSearch({ strict: false }) as Filters;
 	const navigate = useNavigate({ from: "/todos/" });
 
 	const updateFilter = <K extends keyof Filters>(

@@ -1,14 +1,12 @@
-"use client";
-
-import { useState } from "react";
 import { useForm } from "@tanstack/react-form";
 import { useRouter } from "@tanstack/react-router";
-import { Button } from "#/components/ui/button";
-import { Input } from "#/components/ui/input";
-import { Label } from "#/components/ui/label";
-import { useSignUp } from "#/features/auth/auth.mutations";
-import { signupSchema } from "#/features/auth/auth.schema";
-import type { SignupInput } from "#/features/auth/auth.schema";
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { useSignUp } from "@/features/auth/auth.mutations";
+import type { SignupInput } from "@/features/auth/auth.schema";
+import { signupSchema } from "@/features/auth/auth.schema";
 
 export function SignupForm() {
 	const signUp = useSignUp();
@@ -26,12 +24,14 @@ export function SignupForm() {
 		},
 		onSubmit: async ({ value }) => {
 			setRootError(null);
+			console.log("Apunto de hacer singup con datos: ", value);
 			const result = await signUp.mutateAsync(value as SignupInput);
+			console.log(result);
 			if (result.error) {
 				setRootError(result.error.message ?? "Error al crear la cuenta");
 				return;
 			}
-			router.navigate({ to: "/dashboard" });
+			await router.navigate({ to: "/dashboard" });
 		},
 	});
 
@@ -109,15 +109,9 @@ export function SignupForm() {
 				)}
 			</form.Field>
 
-			{rootError && (
-				<p className="text-destructive text-sm">{rootError}</p>
-			)}
+			{rootError && <p className="text-destructive text-sm">{rootError}</p>}
 
-			<Button
-				type="submit"
-				className="w-full"
-				disabled={signUp.isPending}
-			>
+			<Button type="submit" className="w-full" disabled={signUp.isPending}>
 				{signUp.isPending ? "Creando cuenta..." : "Crear cuenta"}
 			</Button>
 		</form>

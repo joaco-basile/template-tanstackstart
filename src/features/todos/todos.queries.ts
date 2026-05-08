@@ -1,6 +1,6 @@
 import { queryOptions } from "@tanstack/react-query";
-import { getTodoByIdFn, getTodosCountFn, getTodosFn } from "./todos.functions";
 import type { TodoFilters } from "./todos";
+import { getTodoByIdFn, getTodosCountFn, getTodosFn } from "./todos.functions";
 
 export const todosQueries = {
 	list: (filters: TodoFilters = {}) =>

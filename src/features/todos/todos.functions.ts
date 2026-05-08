@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { NotFoundError, UnauthorizedError } from "#/lib/errors";
-import { authMiddleware } from "#/middleware/auth";
+import { NotFoundError, UnauthorizedError } from "@/lib/errors";
+import { authMiddleware } from "@/middleware/auth";
 import {
 	createTodoSchema,
 	todoFiltersSchema,
@@ -17,12 +17,18 @@ import {
 } from "./todos.server";
 
 export const getTodosFn = createServerFn({ method: "GET" })
+	.middleware([authMiddleware])
 	.inputValidator(todoFiltersSchema)
-	.handler(async ({ data }) => getTodos(data));
+	.handler(async ({ data, context }) => {
+		if (!context.user) throw new UnauthorizedError();
+		return getTodos(data);
+	});
 
 export const getTodoByIdFn = createServerFn({ method: "GET" })
+	.middleware([authMiddleware])
 	.inputValidator(z.string().min(1))
-	.handler(async ({ data: id }) => {
+	.handler(async ({ data: id, context }) => {
+		if (!context.user) throw new UnauthorizedError();
 		const todo = await getTodoById(id);
 		if (!todo) throw new NotFoundError("Todo");
 		return todo;
@@ -56,5 +62,9 @@ export const deleteTodoFn = createServerFn({ method: "POST" })
 	});
 
 export const getTodosCountFn = createServerFn({ method: "GET" })
+	.middleware([authMiddleware])
 	.inputValidator(todoFiltersSchema)
-	.handler(async ({ data }) => getTodosCount(data));
+	.handler(async ({ data, context }) => {
+		if (!context.user) throw new UnauthorizedError();
+		return getTodosCount(data);
+	});

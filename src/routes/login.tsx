@@ -1,8 +1,14 @@
 import { createFileRoute, Link, redirect } from "@tanstack/react-router";
-import { LoginForm } from "#/features/auth/components/LoginForm";
-import { getSessionFn } from "#/features/auth/auth.functions";
+import { z } from "zod";
+import { getSessionFn } from "@/features/auth/auth.functions";
+import { LoginForm } from "@/features/auth/components/LoginForm";
+
+const loginSearchSchema = z.object({
+	redirect: z.string().optional(),
+});
 
 export const Route = createFileRoute("/login")({
+	validateSearch: loginSearchSchema,
 	beforeLoad: async () => {
 		const session = await getSessionFn();
 		if (session?.user) {

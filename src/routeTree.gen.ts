@@ -11,9 +11,10 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as SignupRouteImport } from './routes/signup'
 import { Route as LoginRouteImport } from './routes/login'
-import { Route as DashboardRouteImport } from './routes/dashboard'
-import { Route as IndexRouteImport } from './routes/index'
-import { Route as TodosIndexRouteImport } from './routes/todos/index'
+import { Route as AuthedRouteRouteImport } from './routes/_authed/route'
+import { Route as AuthedIndexRouteImport } from './routes/_authed/index'
+import { Route as AuthedDashboardRouteImport } from './routes/_authed/dashboard'
+import { Route as AuthedTodosIndexRouteImport } from './routes/_authed/todos/index'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 
 const SignupRoute = SignupRouteImport.update({
@@ -26,20 +27,24 @@ const LoginRoute = LoginRouteImport.update({
   path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
-const DashboardRoute = DashboardRouteImport.update({
-  id: '/dashboard',
-  path: '/dashboard',
+const AuthedRouteRoute = AuthedRouteRouteImport.update({
+  id: '/_authed',
   getParentRoute: () => rootRouteImport,
 } as any)
-const IndexRoute = IndexRouteImport.update({
+const AuthedIndexRoute = AuthedIndexRouteImport.update({
   id: '/',
   path: '/',
-  getParentRoute: () => rootRouteImport,
+  getParentRoute: () => AuthedRouteRoute,
 } as any)
-const TodosIndexRoute = TodosIndexRouteImport.update({
+const AuthedDashboardRoute = AuthedDashboardRouteImport.update({
+  id: '/dashboard',
+  path: '/dashboard',
+  getParentRoute: () => AuthedRouteRoute,
+} as any)
+const AuthedTodosIndexRoute = AuthedTodosIndexRouteImport.update({
   id: '/todos/',
   path: '/todos/',
-  getParentRoute: () => rootRouteImport,
+  getParentRoute: () => AuthedRouteRoute,
 } as any)
 const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
   id: '/api/auth/$',
@@ -48,57 +53,57 @@ const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
 } as any)
 
 export interface FileRoutesByFullPath {
-  '/': typeof IndexRoute
-  '/dashboard': typeof DashboardRoute
+  '/': typeof AuthedIndexRoute
   '/login': typeof LoginRoute
   '/signup': typeof SignupRoute
-  '/todos/': typeof TodosIndexRoute
+  '/dashboard': typeof AuthedDashboardRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/todos/': typeof AuthedTodosIndexRoute
 }
 export interface FileRoutesByTo {
-  '/': typeof IndexRoute
-  '/dashboard': typeof DashboardRoute
   '/login': typeof LoginRoute
   '/signup': typeof SignupRoute
-  '/todos': typeof TodosIndexRoute
+  '/dashboard': typeof AuthedDashboardRoute
+  '/': typeof AuthedIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/todos': typeof AuthedTodosIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
-  '/': typeof IndexRoute
-  '/dashboard': typeof DashboardRoute
+  '/_authed': typeof AuthedRouteRouteWithChildren
   '/login': typeof LoginRoute
   '/signup': typeof SignupRoute
-  '/todos/': typeof TodosIndexRoute
+  '/_authed/dashboard': typeof AuthedDashboardRoute
+  '/_authed/': typeof AuthedIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/_authed/todos/': typeof AuthedTodosIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
-    | '/dashboard'
     | '/login'
     | '/signup'
-    | '/todos/'
+    | '/dashboard'
     | '/api/auth/$'
+    | '/todos/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/dashboard' | '/login' | '/signup' | '/todos' | '/api/auth/$'
+  to: '/login' | '/signup' | '/dashboard' | '/' | '/api/auth/$' | '/todos'
   id:
     | '__root__'
-    | '/'
-    | '/dashboard'
+    | '/_authed'
     | '/login'
     | '/signup'
-    | '/todos/'
+    | '/_authed/dashboard'
+    | '/_authed/'
     | '/api/auth/$'
+    | '/_authed/todos/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
-  IndexRoute: typeof IndexRoute
-  DashboardRoute: typeof DashboardRoute
+  AuthedRouteRoute: typeof AuthedRouteRouteWithChildren
   LoginRoute: typeof LoginRoute
   SignupRoute: typeof SignupRoute
-  TodosIndexRoute: typeof TodosIndexRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
 }
 
@@ -118,26 +123,33 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/dashboard': {
-      id: '/dashboard'
-      path: '/dashboard'
-      fullPath: '/dashboard'
-      preLoaderRoute: typeof DashboardRouteImport
+    '/_authed': {
+      id: '/_authed'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof AuthedRouteRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/': {
-      id: '/'
+    '/_authed/': {
+      id: '/_authed/'
       path: '/'
       fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
-      parentRoute: typeof rootRouteImport
+      preLoaderRoute: typeof AuthedIndexRouteImport
+      parentRoute: typeof AuthedRouteRoute
     }
-    '/todos/': {
-      id: '/todos/'
+    '/_authed/dashboard': {
+      id: '/_authed/dashboard'
+      path: '/dashboard'
+      fullPath: '/dashboard'
+      preLoaderRoute: typeof AuthedDashboardRouteImport
+      parentRoute: typeof AuthedRouteRoute
+    }
+    '/_authed/todos/': {
+      id: '/_authed/todos/'
       path: '/todos'
       fullPath: '/todos/'
-      preLoaderRoute: typeof TodosIndexRouteImport
-      parentRoute: typeof rootRouteImport
+      preLoaderRoute: typeof AuthedTodosIndexRouteImport
+      parentRoute: typeof AuthedRouteRoute
     }
     '/api/auth/$': {
       id: '/api/auth/$'
@@ -149,12 +161,26 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface AuthedRouteRouteChildren {
+  AuthedDashboardRoute: typeof AuthedDashboardRoute
+  AuthedIndexRoute: typeof AuthedIndexRoute
+  AuthedTodosIndexRoute: typeof AuthedTodosIndexRoute
+}
+
+const AuthedRouteRouteChildren: AuthedRouteRouteChildren = {
+  AuthedDashboardRoute: AuthedDashboardRoute,
+  AuthedIndexRoute: AuthedIndexRoute,
+  AuthedTodosIndexRoute: AuthedTodosIndexRoute,
+}
+
+const AuthedRouteRouteWithChildren = AuthedRouteRoute._addFileChildren(
+  AuthedRouteRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
-  IndexRoute: IndexRoute,
-  DashboardRoute: DashboardRoute,
+  AuthedRouteRoute: AuthedRouteRouteWithChildren,
   LoginRoute: LoginRoute,
   SignupRoute: SignupRoute,
-  TodosIndexRoute: TodosIndexRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
 }
 export const routeTree = rootRouteImport
