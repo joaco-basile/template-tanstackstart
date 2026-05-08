@@ -1,5 +1,3 @@
-"use client";
-
 import { useForm } from "@tanstack/react-form";
 import { useRouter, useSearch } from "@tanstack/react-router";
 import { useState } from "react";

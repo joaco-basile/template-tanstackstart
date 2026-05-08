@@ -24,9 +24,7 @@ export function SignupForm() {
 		},
 		onSubmit: async ({ value }) => {
 			setRootError(null);
-			console.log("Apunto de hacer singup con datos: ", value);
 			const result = await signUp.mutateAsync(value as SignupInput);
-			console.log(result);
 			if (result.error) {
 				setRootError(result.error.message ?? "Error al crear la cuenta");
 				return;

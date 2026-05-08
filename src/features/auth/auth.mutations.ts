@@ -31,9 +31,6 @@ export function useSignUp() {
 		onSuccess: () => {
 			queryClient.invalidateQueries({ queryKey: ["auth", "session"] });
 		},
-		onError: (e) => {
-			console.log("Error al hacer singup", e);
-		},
 	});
 }
 

@@ -1,5 +1,3 @@
-"use client";
-
 import { Link } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
 import { useSignOut } from "@/features/auth/auth.mutations";
