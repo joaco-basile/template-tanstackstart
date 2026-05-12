@@ -13,7 +13,7 @@ export function ErrorPage({ error }: { error: unknown }) {
 					>
 						Recargar página
 					</button>
-					{process.env.NODE_ENV === "development" && (
+					{import.meta.env.DEV && (
 						<pre className="mt-4 text-left p-4 bg-muted rounded-md overflow-auto max-w-2xl text-sm">
 							{error instanceof Error ? error.message : "Error desconocido"}
 						</pre>

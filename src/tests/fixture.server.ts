@@ -6,7 +6,7 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
 import { test as base } from "vitest";
 import type { DB } from "@/db/index.server";
-import { env } from "@/env";
+import { env } from "@/lib/env/server";
 import * as schema from "../db/schemas";
 
 const pool = new pg.Pool({
