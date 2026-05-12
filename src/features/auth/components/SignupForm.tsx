@@ -1,6 +1,6 @@
 import { useForm } from "@tanstack/react-form";
 import { useRouter } from "@tanstack/react-router";
-import { useState } from "react";
+import { zodValidator } from "@tanstack/zod-form-adapter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,9 +11,9 @@ import { signupSchema } from "@/features/auth/auth.schema";
 export function SignupForm() {
 	const signUp = useSignUp();
 	const router = useRouter();
-	const [rootError, setRootError] = useState<string | null>(null);
 
 	const form = useForm({
+		validatorAdapter: zodValidator(),
 		defaultValues: {
 			name: "",
 			email: "",
@@ -23,10 +23,12 @@ export function SignupForm() {
 			onChange: signupSchema,
 		},
 		onSubmit: async ({ value }) => {
-			setRootError(null);
+			form.setErrorMap({});
 			const result = await signUp.mutateAsync(value as SignupInput);
 			if (result.error) {
-				setRootError(result.error.message ?? "Error al crear la cuenta");
+				form.setErrorMap({
+					onServer: result.error.message ?? "Error al crear la cuenta",
+				});
 				return;
 			}
 			await router.navigate({ to: "/dashboard" });
@@ -56,7 +58,7 @@ export function SignupForm() {
 						/>
 						{field.state.meta.errors.length > 0 && (
 							<p className="text-destructive text-sm">
-								{field.state.meta.errors[0]?.message}
+								{field.state.meta.errors.join(", ")}
 							</p>
 						)}
 					</div>
@@ -78,7 +80,7 @@ export function SignupForm() {
 						/>
 						{field.state.meta.errors.length > 0 && (
 							<p className="text-destructive text-sm">
-								{field.state.meta.errors[0]?.message}
+								{field.state.meta.errors.join(", ")}
 							</p>
 						)}
 					</div>
@@ -100,14 +102,20 @@ export function SignupForm() {
 						/>
 						{field.state.meta.errors.length > 0 && (
 							<p className="text-destructive text-sm">
-								{field.state.meta.errors[0]?.message}
+								{field.state.meta.errors.join(", ")}
 							</p>
 						)}
 					</div>
 				)}
 			</form.Field>
 
-			{rootError && <p className="text-destructive text-sm">{rootError}</p>}
+			<form.Subscribe selector={(state) => state.errorMap}>
+				{(errorMap) =>
+					errorMap.onServer ? (
+						<p className="text-destructive text-sm">{errorMap.onServer}</p>
+					) : null
+				}
+			</form.Subscribe>
 
 			<Button type="submit" className="w-full" disabled={signUp.isPending}>
 				{signUp.isPending ? "Creando cuenta..." : "Crear cuenta"}
