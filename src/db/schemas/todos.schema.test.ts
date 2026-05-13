@@ -1,6 +1,6 @@
 import { faker } from "@faker-js/faker";
 import { eq } from "drizzle-orm";
-import { expect, test } from "../tests/fixture.server";
+import { expect, test } from "../../tests/fixture.server";
 import { todos } from "./schemas";
 
 test("creates a todo within an isolated transaction", async ({ db }) => {

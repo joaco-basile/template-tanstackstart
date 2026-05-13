@@ -1,5 +1,6 @@
 import { useForm } from "@tanstack/react-form";
-import { useState } from "react";
+import { zodValidator } from "@tanstack/zod-form-adapter";
+import { useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -34,44 +35,36 @@ export function EditTodoSheet({
 	onOpenChange,
 }: EditTodoSheetProps) {
 	const updateTodo = useUpdateTodo();
-	const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
 	const form = useForm({
+		validatorAdapter: zodValidator(),
 		defaultValues: {
-			title: todo?.title ?? "",
-			description: todo?.description ?? "",
-			status: todo?.status ?? "pending",
+			title: "",
+			description: "",
+			status: "pending" as "pending" | "completed",
+		},
+		validators: {
+			onChange: updateTodoSchema,
 		},
 		onSubmit: async ({ value }) => {
 			if (!todo) return;
-			setFieldErrors({});
-			const result = updateTodoSchema.safeParse(value);
-			if (!result.success) {
-				const errors: Record<string, string> = {};
-				for (const issue of result.error.issues) {
-					const key = issue.path.join(".");
-					errors[key] = issue.message;
-				}
-				setFieldErrors(errors);
-				return;
-			}
 			await updateTodo.mutateAsync({
 				id: todo.id,
-				data: result.data as UpdateTodoInput,
+				data: value as UpdateTodoInput,
 			});
 			onOpenChange(false);
 		},
 	});
 
-	// Update form values when todo changes
-	if (todo && open) {
-		const currentTitle = form.getFieldValue("title");
-		if (currentTitle !== todo.title) {
-			form.setFieldValue("title", todo.title);
-			form.setFieldValue("description", todo.description ?? "");
-			form.setFieldValue("status", todo.status);
+	useEffect(() => {
+		if (todo && open) {
+			form.reset({
+				title: todo.title,
+				description: todo.description ?? "",
+				status: todo.status,
+			});
 		}
-	}
+	}, [todo, open, form]);
 
 	return (
 		<Sheet open={open} onOpenChange={onOpenChange}>
@@ -98,9 +91,9 @@ export function EditTodoSheet({
 									onBlur={field.handleBlur}
 									onChange={(e) => field.handleChange(e.target.value)}
 								/>
-								{fieldErrors.title && (
+								{field.state.meta.errors.length > 0 && (
 									<p className="text-destructive text-sm">
-										{fieldErrors.title}
+										{field.state.meta.errors.join(", ")}
 									</p>
 								)}
 							</div>
@@ -119,6 +112,11 @@ export function EditTodoSheet({
 									onChange={(e) => field.handleChange(e.target.value)}
 									rows={3}
 								/>
+								{field.state.meta.errors.length > 0 && (
+									<p className="text-destructive text-sm">
+										{field.state.meta.errors.join(", ")}
+									</p>
+								)}
 							</div>
 						)}
 					</form.Field>
@@ -141,6 +139,11 @@ export function EditTodoSheet({
 										<SelectItem value="completed">Completado</SelectItem>
 									</SelectContent>
 								</Select>
+								{field.state.meta.errors.length > 0 && (
+									<p className="text-destructive text-sm">
+										{field.state.meta.errors.join(", ")}
+									</p>
+								)}
 							</div>
 						)}
 					</form.Field>
